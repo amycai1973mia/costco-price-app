@@ -236,6 +236,7 @@ def parse_receipt(lines):
         code=None; rest=None; qty=1; split_conf_cap=1.0; special=""
         m_doz=re.match(r'^(\d{3})([1-9])\s+([A-Za-z].*(?:DOZ|EGGS).+)$', t, re.I)
         m_sp=re.match(r'^(\d{3,12})\s+(.+)$', t)
+        m_sym=re.match(r'^(\d{3,12})[\*%#]+([A-Za-z].+)$', t)
         m_gl=re.match(r'^(\d{3,12})([A-Za-z/].+)$', t)
         if m_doz:
             # 5 是名称里的 "5 DOZ" 不是购买数量: 代码=669, 数量仍=1, 名称补回 "5 DOZ EGGS"
@@ -243,6 +244,8 @@ def parse_receipt(lines):
             split_conf_cap=0.5; special="doz"
         elif m_sp:
             code, rest = m_sp.group(1), m_sp.group(2)
+        elif m_sym:
+            code, rest = m_sym.group(1), m_sym.group(2); split_conf_cap=0.8; special="symbol"
         elif m_gl:
             code, rest = m_gl.group(1), m_gl.group(2)
             split_conf_cap=0.8; special="glued"
@@ -291,6 +294,7 @@ def parse_receipt(lines):
                 price=""
             if price=="":
                 conf=min(conf, 0.4)
+        name=re.sub(r'^[*%#]+','',name).rstrip('*').strip()
         name=re.sub(r'^/','折扣 ',name).strip()
         # --- 折扣判定: 000039* 代码 / TPD 或 / 开头 / 价格带负号尾巴 ---
         is_disc = code.startswith("000039") or bool(re.match(r'^(TPD/|/|折扣\s)', name.upper())) or bool(re.search(r'\d\.\d{2}\s*-\s*(GP)?\s*$', t))
