@@ -28,7 +28,7 @@
 | 三个项目文件建立 | 已完成 | 本次建立 PROJECT_CONTEXT.md、PROGRESS.md、TEST_RESULTS.md |
 | 第一步 MVP 原型开发 | 已完成 | 2026-10-17 完成于 `/workspace/costco-price-app/`：拍照/上传 → 本地 OCR 识别 → 大字确认页（低置信黄底警告、可点改）→ 确认后写入 SQLite；含已导入记录列表页。启动：`./run.sh`，访问 http://127.0.0.1:5003 |
 | 识别规则改版（第二轮） | 已完成 | 2026-10-17 按用户新发2张小票复测意见改 `ocr_parser.py`：代码/名称黏连拆分、短代码669拆分、变形价留空不猜、拆行价格合并、名称0->O、折扣挂上一件商品、START/END商品区、授权行日期、拼歪标签、件数反查+确认页提示；新建 `RECEIPT_FORMAT_RULES.md` 存档固定格式规则。复测：小票1抓8/8件、小票2抓13/13件，旧样本无回归（见TEST_RESULTS记录5-8）。仍未把测试小票确认导入 |
-| GitHub Pages 网页试用版 | 已完成 | 2026-10-17 新增 `docs/index.html` + `docs/parser.js`：纯前端 Tesseract.js 本地 OCR（照片不上传服务器）+ 从 `ocr_parser.py` 移植的固定版式解析（商品区/代码黏连/名称0纠O/负数折扣挂靠/件数核对/授权行日期等）；大字大按钮、识别进度提示、⚠请核对标记、件数核对结果；本版只看不改、不导入数据库。Pages 源为 main 分支 /docs |
+| GitHub Pages 网页试用版 | 已完成 | 2026-10-17 新增 `docs/index.html` + `docs/parser.js`：纯前端 Tesseract.js 本地 OCR（照片不上传服务器）+ 从 `ocr_parser.py` 移植的固定版式解析（商品区/代码黏连/名称0纠O/负数折扣挂靠/件数核对/授权行日期等）；大字大按钮、识别进度提示、⚠请核对标记、件数核对结果；本版只看不改、不导入数据库。Pages 源为 main 分支 /docs，链接 https://amycai1973mia.github.io/costco-price-app/ 已 curl 验证 200 |
 | 小票样本收集 | 已完成 | 已有 2 张真实样本：`/workspace/costco/receipts/2026-10-08_0952_inv205300.jpg`、`2026-10-08_0946_inv202549.jpg`（均为 Port Coquitlam #255，2026-10-08） |
 
 ## 3. 尚未开始
