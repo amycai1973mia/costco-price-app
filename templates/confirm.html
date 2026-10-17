@@ -10,6 +10,9 @@
 <input name="purchase_date" value="{{d.purchase_date}}" placeholder="例如 2026-10-08" class="{{'warn' if d.date_confidence < 0.85}}"></label>
 <label>总计（元） {% if d.total_confidence < 0.85 %}<span class="warn-tag">⚠ 请重点核对</span>{% endif %}
 <input name="total" value="{{d.total if d.total is not none else ''}}" class="{{'warn' if d.total_confidence < 0.85}}"></label>
+{% if d.expected_item_count is defined and d.expected_item_count is not none %}
+{% if d.count_mismatch %}<p class="warn-tag" style="font-size:1.2rem">⚠ 件数对不上：小票上写共 {{d.expected_item_count}} 件，识别到 {{d.product_count}} 件商品，请重点核对，可能漏了商品。</p>
+{% else %}<p>✔ 件数核对：小票共 {{d.expected_item_count}} 件，识别到 {{d.product_count}} 件。</p>{% endif %}{% endif %}
 <h2>商品清单（共 {{d["items"]|length}} 项）</h2>
 {% for it in d["items"] %}
 <div class="item {{'warn-box' if it.confidence < 0.85}}">
@@ -18,6 +21,9 @@
 <label>商品名称 <input name="item_name" value="{{it.item_name}}"></label>
 <label>价格 <input name="item_price" value="{{it.price}}"></label>
 <label>数量 <input name="item_qty" value="{{it.quantity}}" inputmode="numeric"></label>
+{% if it.discount != "" and it.discount is not none %}<div style="color:#b00020;font-size:1.15rem;margin:4px 0 8px">↳ 折扣 {{it.discount}}（属于这件商品）</div>{% endif %}
+<input type="hidden" name="item_discount" value="{{it.discount}}">
+<input type="hidden" name="item_discount_code" value="{{it.discount_code}}">
 <label class="del">不要这一行 <input type="checkbox" name="delete_item" value="{{loop.index0}}"></label>
 </div>
 {% endfor %}

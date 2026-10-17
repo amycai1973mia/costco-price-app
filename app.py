@@ -50,6 +50,7 @@ def save(rid):
     total=request.form.get("total","").strip()
     codes=request.form.getlist("item_code"); names=request.form.getlist("item_name")
     prices=request.form.getlist("item_price"); qtys=request.form.getlist("item_qty"); dels=request.form.getlist("delete_item")
+    discs=request.form.getlist("item_discount"); disc_codes=request.form.getlist("item_discount_code")
     con=db()
     cur=con.execute("INSERT INTO receipts(store_code,purchase_date,total,image_path,imported_at) VALUES(?,?,?,?,?)",
         (store,date,float(total) if total else None, data.get("image_name",""), datetime.now().isoformat(timespec="seconds")))
@@ -63,6 +64,13 @@ def save(rid):
         except: qty=1
         con.execute("INSERT INTO receipt_items(receipt_id,item_code,item_name,price,quantity) VALUES(?,?,?,?,?)",
             (receipt_id, code.strip(), names[i].strip(), price, qty))
+        # 折扣挂在商品下保存为负数行, 不丢折扣信息
+        if i < len(discs) and discs[i].strip():
+            try: dv=float(discs[i])
+            except: dv=None
+            if dv is not None:
+                con.execute("INSERT INTO receipt_items(receipt_id,item_code,item_name,price,quantity) VALUES(?,?,?,?,?)",
+                    (receipt_id, disc_codes[i].strip() if i < len(disc_codes) else "", f"折扣 {names[i].strip()}", dv, 1))
     con.commit(); con.close()
     return redirect(url_for("records"))
 
