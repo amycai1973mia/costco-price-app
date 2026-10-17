@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>已导入的小票</title><link rel="stylesheet" href="/static/style.css"></head><body><main>
+<h1>已导入的小票</h1>
+<a class="second-btn" href="/">＋ 再导入一张小票</a>
+{% for r,items in receipts %}
+<section class="record"><h2>{{r.purchase_date or '日期未填'}} · 商店 {{r.store_code or '?'}} · 总计 {{r.total if r.total is not none else '?'}}</h2>
+<p class="hint">导入时间：{{r.imported_at}}</p>
+<table><tr><th>商品代码</th><th>名称</th><th>价格</th><th>数量</th></tr>
+{% for it in items %}<tr><td>{{it.item_code}}</td><td>{{it.item_name}}</td><td>{{it.price}}</td><td>{{it.quantity}}</td></tr>{% endfor %}
+</table></section>
+{% else %}<p class="big">还没有导入过小票。</p>{% endfor %}
+</main></body></html>

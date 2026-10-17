@@ -1,0 +1,17 @@
+*{box-sizing:border-box} body{font-family:system-ui,"Microsoft YaHei",sans-serif;font-size:20px;line-height:1.6;margin:0;background:#f6f6f6;color:#111}
+main{max-width:760px;margin:0 auto;padding:20px} h1{font-size:34px} h2{font-size:26px}
+.big{font-size:22px} .steps{font-size:22px}
+.upload-btn,.confirm-btn{display:block;width:100%;text-align:center;background:#c00;color:#fff;font-size:26px;padding:22px;border-radius:14px;border:0;cursor:pointer;margin:24px 0}
+.upload-btn input{display:none}
+.second-btn{display:block;text-align:center;background:#fff;border:2px solid #333;color:#111;font-size:22px;padding:16px;border-radius:12px;text-decoration:none;margin:14px 0}
+input{font-size:20px;padding:12px;width:100%;margin:6px 0 14px;border:2px solid #999;border-radius:8px}
+label{display:block;font-weight:600}
+.warn{background:#fff3b0!important;border-color:#e67700!important}
+.warn-box{background:#fff8db;border:2px solid #e67700;border-radius:12px;padding:14px;margin:12px 0}
+.warn-tag{color:#b35c00;font-weight:700}
+.item{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px;margin:12px 0}
+.del input{width:auto;transform:scale(1.6);margin-left:12px}
+.receipt-img{max-width:100%;border-radius:10px}
+table{width:100%;border-collapse:collapse;background:#fff} td,th{border:1px solid #ddd;padding:10px;font-size:18px}
+.record{background:#fff;padding:16px;border-radius:12px;margin:16px 0}
+.hint{color:#555} pre{white-space:pre-wrap;font-size:15px}

@@ -1,0 +1,30 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>请核对小票</title><link rel="stylesheet" href="/static/style.css"></head><body><main>
+<h1>第 2 步：请核对一下</h1>
+<p class="big">黄色底色的格子，识别不太有把握，请重点看看。<br>错了直接点格子修改。</p>
+<img class="receipt-img" src="/uploads/{{d.image_name}}" alt="小票照片">
+<form method="post">
+<label>商店代码（门店号） {% if d.store_confidence < 0.85 %}<span class="warn-tag">⚠ 请重点核对</span>{% endif %}
+<input name="store_code" value="{{d.store_code}}" class="{{'warn' if d.store_confidence < 0.85}}"></label>
+<label>购买日期 {% if d.date_confidence < 0.85 %}<span class="warn-tag">⚠ 请重点核对</span>{% endif %}
+<input name="purchase_date" value="{{d.purchase_date}}" placeholder="例如 2026-10-08" class="{{'warn' if d.date_confidence < 0.85}}"></label>
+<label>总计（元） {% if d.total_confidence < 0.85 %}<span class="warn-tag">⚠ 请重点核对</span>{% endif %}
+<input name="total" value="{{d.total if d.total is not none else ''}}" class="{{'warn' if d.total_confidence < 0.85}}"></label>
+<h2>商品清单（共 {{d["items"]|length}} 项）</h2>
+{% for it in d["items"] %}
+<div class="item {{'warn-box' if it.confidence < 0.85}}">
+{% if it.confidence < 0.85 %}<div class="warn-tag">⚠ 这一行请重点核对</div>{% endif %}
+<label>商品代码 <input name="item_code" value="{{it.item_code}}"></label>
+<label>商品名称 <input name="item_name" value="{{it.item_name}}"></label>
+<label>价格 <input name="item_price" value="{{it.price}}"></label>
+<label>数量 <input name="item_qty" value="{{it.quantity}}" inputmode="numeric"></label>
+<label class="del">不要这一行 <input type="checkbox" name="delete_item" value="{{loop.index0}}"></label>
+</div>
+{% endfor %}
+{% if not d["items"] %}<p class="warn-tag">没有识别出商品，请对照照片在下面核对，或重新拍一张更清楚的照片。</p>{% endif %}
+<button class="confirm-btn" type="submit">✅ 第 3 步：确认无误，导入</button>
+<a class="second-btn" href="/">重新拍一张</a>
+</form>
+<details><summary>查看识别到的原文（核对用）</summary><pre>{% for l in d.raw_lines %}{{l.text}}
+{% endfor %}</pre></details>
+</main></body></html>

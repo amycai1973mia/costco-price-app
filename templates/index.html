@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Costco 小票助手</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<main>
+<h1>🧾 Costco 小票助手</h1>
+<p class="big">只需三步：</p>
+<ol class="steps"><li>拍一张小票照片</li><li>看一看识别结果，错了点一下改</li><li>点“确认导入”就存好了</li></ol>
+<form action="/upload" method="post" enctype="multipart/form-data">
+<label class="upload-btn">📷 第 1 步：点这里拍小票 / 选照片
+<input type="file" name="receipt" accept="image/*" capture="environment" required onchange="this.form.submit()">
+</label>
+<p class="hint">请把小票放平、拍清楚。上传后请稍等十几秒，正在识别…</p>
+</form>
+<a class="second-btn" href="/records">查看已导入的小票</a>
+</main></body></html>
