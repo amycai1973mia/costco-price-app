@@ -24,6 +24,15 @@ th,td{border-bottom:1px solid #ddd;padding:10px 6px;text-align:left;vertical-ali
 .small{font-size:17px;color:#444} .big{font-size:22px;font-weight:700}
 .disc{color:#b00020;font-weight:700} .note{font-size:16px;color:#0a7a42} .note2{font-size:16px;color:#666}
 .notice{background:#e8f3ff;border:1px solid #9ec5ea;border-radius:12px;padding:12px}
+input.field{width:100%;box-sizing:border-box;font-size:22px;padding:14px 12px;border:2px solid #888;border-radius:10px;background:#fff;min-height:56px}
+input.field.warn{background:#fff3a3;border-color:#b58900}
+.fieldwrap{padding:6px 0}
+label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bottom:4px}
+.savebtn{background:#0a7a42!important;font-size:26px!important}
+.delbtn{background:#b00020;font-size:18px;padding:12px}
+.clearbtn{background:#666;font-size:18px;padding:12px}
+#saveMsg{font-size:24px;font-weight:700;color:#0a7a42;background:#e6f4ea;border-radius:12px;padding:14px;display:none}
+.rec{border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;background:#fff}
 </style>
 </head>
 <body>
@@ -45,20 +54,34 @@ th,td{border-bottom:1px solid #ddd;padding:10px 6px;text-align:left;vertical-ali
 </div>
 
 <div class="card" id="result" style="display:none">
-  <div class="big">识别结果（请核对）</div>
+  <div class="big">第 3 步：核对，有错就点一下改</div>
+  <p class="small">点日期、代码、价格这些数字框，会自动弹出数字键盘。带 ⚠ 的地方请重点核对。</p>
   <table>
-    <tr><th>门店代码</th><td id="store"></td></tr>
-    <tr><th>购买日期</th><td id="date"></td></tr>
-    <tr><th>小计</th><td id="subtotal"></td></tr>
-    <tr><th>总计</th><td id="total"></td></tr>
+    <tr><th>门店代码</th><td><input class="field" id="store" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 255"></td></tr>
+    <tr><th>购买日期</th><td><input class="field" id="date" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 2026-10-03"><div class="small">日期格式：年-月-日，如 2026-10-03</div></td></tr>
+    <tr><th>小计 $</th><td><input class="field" id="subtotal" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 90.91"></td></tr>
+    <tr><th>总计 $</th><td><input class="field" id="total" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 93.79"></td></tr>
+    <tr><th>商品件数</th><td><input class="field" id="countInput" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 5"></td></tr>
   </table>
   <h2 style="font-size:24px">商品列表</h2>
-  <table><thead><tr><th>代码</th><th>名称</th><th>价格</th></tr></thead><tbody id="items"></tbody></table>
+  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。</p>
+  <table><thead><tr><th>代码</th><th>名称</th><th>价格 $</th></tr></thead><tbody id="items"></tbody></table>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
   <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
-  <p class="small">带 ⚠ 请核对 的地方，是程序没把握或没认出来的地方。这一版网页先能看、不能改，也不会导入数据库——就是给您试试识别效果。</p>
+  <div class="big" style="margin-top:18px">第 4 步：核对无误才入库</div>
+  <p class="small">没点下面这个按钮，就不会保存。这版先存在您手机浏览器本地（IndexedDB），照片和数据不上传服务器；后续正式 App 再对接云端。</p>
+  <button id="saveBtn" class="savebtn">确认无误，入库</button>
+  <div id="saveMsg" role="status"></div>
   <details><summary class="small">查看识别到的原始文字（核对用）</summary><pre id="raw" style="white-space:pre-wrap;font-size:14px"></pre></details>
+</div>
+
+<div class="card" id="recordsCard">
+  <div class="big">已入库记录（存在本机）</div>
+  <p class="small">这里能看到您点过「确认无误，入库」的小票。没入库的识别结果，刷新页面就没了，不会保存。</p>
+  <button id="refreshRecords">查看已入库记录</button>
+  <div id="records"></div>
+  <button id="clearRecords" class="clearbtn">清空全部已入库记录</button>
 </div>
 <p class="small">网页试用版：浏览器本地 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和电脑本地版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
 </main>
@@ -156,32 +179,57 @@ async function tryPaddleFallback(prep, current, force){
   }
 }
 
+let _currentItems=[];
+function numVal(id){ const v=$(id).value.trim(); if(v==='') return null; const n=Number(v.replace(/[^0-9.\-]/g,'')); return isNaN(n)?null:n; }
+function collectReceipt(){
+  const items=[];
+  document.querySelectorAll('#items tr.itemrow').forEach(tr=>{
+    const code=tr.querySelector('.f-code').value.trim();
+    const name=tr.querySelector('.f-name').value.trim();
+    const pv=tr.querySelector('.f-price').value.trim();
+    const dEl=tr.querySelector('.f-discount');
+    const dv=dEl?dEl.value.trim():'';
+    items.push({item_code:code,item_name:name,price:pv===''? '':Number(pv),discount:dv===''? '':Number(dv)});
+  });
+  const cnt=numVal('countInput');
+  return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,saved_at:new Date().toISOString()};
+}
 function render(r,raw){
   $('result').style.display='block';
-  const set=(id,v,conf)=>{ const w=warnCell(v,conf); const el=$(id); el.textContent=w.txt; el.className=w.bad?'warn':''; };
-  set('store',r.store_code,r.store_confidence); set('date',r.purchase_date,r.date_confidence); set('total',r.total!==null?r.total.toFixed(2):'',r.total_confidence); set('subtotal',r.subtotal!==null&&r.subtotal!==undefined?Number(r.subtotal).toFixed(2):'',0.99);
-  if(r.subtotal===null||r.subtotal===undefined){ $('subtotal').textContent='—'; $('subtotal').className=''; }
+  $('saveMsg').style.display='none'; const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库';
+  const setNum=(id,v,conf)=>{ const el=$(id); el.value=(v===''||v===null||v===undefined)?'':v; const w=warnCell(el.value,conf); el.classList.toggle('warn',w.bad); el.title=w.bad?'请重点核对':''; };
+  setNum('store',r.store_code,r.store_confidence);
+  setNum('date',r.purchase_date,r.date_confidence);
+  setNum('total',r.total!==null?r.total.toFixed(2):'',r.total_confidence);
+  setNum('subtotal',(r.subtotal!==null&&r.subtotal!==undefined)?Number(r.subtotal).toFixed(2):'',0.99);
+  if(r.subtotal===null||r.subtotal===undefined) $('subtotal').classList.add('warn');
+  setNum('countInput',r.product_count, r.count_mismatch?0.3:0.99);
+  _currentItems=r.items||[];
   const tb=$('items'); tb.innerHTML='';
   if(!r.items.length) tb.innerHTML='<tr><td colspan="3" class="warn">一件商品都没认出来 ⚠ 请核对：请拍正、拍清楚再试</td></tr>';
   for(const it of r.items){
-    const tr=document.createElement('tr');
-    // 数字优先: 只有代码/价格没把握才黄标; 名称小错只轻提示, 不黄标、不丢行
+    const tr=document.createElement('tr'); tr.className='itemrow';
     const numBad=(it.price===''||!/^\d{3,}$/.test(String(it.item_code)));
-    if(numBad) tr.className='warn';
-    const priceTxt=it.price===''?'没认出来 ⚠ 请核对':Number(it.price).toFixed(2);
-    tr.innerHTML='<td></td><td></td><td></td>';
-    tr.children[0].textContent=it.item_code+(numBad&&!/^\d{3,}$/.test(String(it.item_code))?' ⚠':'');
-    tr.children[1].textContent=it.item_name;
-    if(it.name_corrected){ const s=document.createElement('div'); s.className='note'; s.textContent='✓ 已自动纠正名称，请扫一眼'; tr.children[1].appendChild(s); }
-    else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ const s=document.createElement('div'); s.className='note2'; s.textContent='名称可能有一两个错字'; tr.children[1].appendChild(s); }
-    tr.children[2].textContent=priceTxt;
+    tr.innerHTML='<td><input class="field f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td>';
+    const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
+    codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
+    if(!/^\d{3,}$/.test(String(it.item_code))) codeEl.classList.add('warn');
+    if(it.price==='') priceEl.classList.add('warn');
+    const note=tr.querySelector('.noteTxt');
+    if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
+    else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
     tb.appendChild(tr);
     if(it.discount!==''&&it.discount!==undefined&&it.discount!==null){
-      const d=document.createElement('tr');
-      d.innerHTML='<td></td><td class="disc"></td><td class="disc"></td>';
-      d.children[1].textContent='↳ 折扣（属于上面这件商品）'; d.children[2].textContent=Number(it.discount).toFixed(2); tb.appendChild(d);
+      const d=document.createElement('tr'); d.className='itemrow-discount';
+      // discount belongs to previous item; store as hidden-ish editable row linked to previous item input via data on previous row
+      d.innerHTML='<td></td><td class="disc">↳ 折扣（属于上面这件商品） $</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td>';
+      d.querySelector('.f-discount').value=Number(it.discount).toFixed(2);
+      // attach discount input to previous item row for collect: move node reference
+      tr.dataset.hasDiscount='1';
+      tb.appendChild(d);
     }
   }
+  // fix discount collection: move discount inputs are inside previous tr hidden; instead link by order handled in collect via DOM order below
   if(r.expected_item_count!==null&&r.expected_item_count!==undefined){
     $('count').textContent=r.count_mismatch?(`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，对不上 ⚠ 请重点核对`):(`件数核对：抓到 ${r.product_count} 件，和小票底部 ${r.expected_item_count} 件对上了 ✓`);
     $('count').className=r.count_mismatch?'big warn':'big';
@@ -194,6 +242,67 @@ function render(r,raw){
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
 }
+// Re-wire collect to handle discount rows in DOM order
+collectReceipt=function(){
+  const items=[];
+  document.querySelectorAll('#items tr.itemrow').forEach(tr=>{
+    const code=tr.querySelector('.f-code').value.trim();
+    const name=tr.querySelector('.f-name').value.trim();
+    const pv=tr.querySelector('.f-price').value.trim();
+    items.push({item_code:code,item_name:name,price:pv===''? '':Number(pv),discount:''});
+  });
+  // discount rows follow item rows in DOM
+  let idx=-1;
+  document.querySelectorAll('#items tr').forEach(tr=>{
+    if(tr.classList.contains('itemrow')) idx++;
+    else if(tr.querySelector('.f-discount') && idx>=0){ const dv=tr.querySelector('.f-discount').value.trim(); items[idx].discount=dv===''? '':Number(dv); }
+  });
+  const cnt=numVal('countInput');
+  return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,saved_at:new Date().toISOString()};
+};
+// --- IndexedDB 本地入库 (纯静态网页, 不上传) ---
+function openDB(){ return new Promise((res,rej)=>{ const rq=indexedDB.open('costco-receipts',1); rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains('receipts')) db.createObjectStore('receipts',{keyPath:'id',autoIncrement:true}); }; rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+async function idbAdd(rec){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction('receipts','readwrite'); tx.objectStore('receipts').add(rec); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+async function idbAll(){ const db=await openDB(); return new Promise((res,rej)=>{ const rq=db.transaction('receipts','readonly').objectStore('receipts').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }); }
+async function idbDelete(id){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction('receipts','readwrite'); tx.objectStore('receipts').delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+async function idbClear(){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction('receipts','readwrite'); tx.objectStore('receipts').clear(); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
+async function renderRecords(){
+  const box=$('records'); if(!box) return;
+  try{
+    const all=(await idbAll()).sort((a,b)=>b.id-a.id);
+    if(!all.length){ box.innerHTML='<p class="small">还没有入库记录。</p>'; return; }
+    box.innerHTML='';
+    for(const rec of all){
+      const div=document.createElement('div'); div.className='rec';
+      const totalTxt=rec.total!==null&&rec.total!==undefined?('$'+Number(rec.total).toFixed(2)):'—';
+      div.innerHTML=`<div class="big">${esc(rec.purchase_date||'日期没填')} · 门店 ${esc(rec.store_code||'—')} · ${esc(rec.item_count)} 件 · 总计 ${totalTxt}</div><details><summary class="small">展开看商品（${(rec.items||[]).length} 件）</summary><div class="itemsDetail"></div></details><button class="delbtn">删除这一条</button>`;
+      const det=div.querySelector('.itemsDetail');
+      det.innerHTML=(rec.items||[]).map(it=>`<div class="small">${esc(it.item_code)} ${esc(it.item_name)} $${it.price===''?'—':Number(it.price).toFixed(2)}${it.discount!==''&&it.discount!==undefined?('（折扣 $'+Number(it.discount).toFixed(2)+'）'):''}</div>`).join('')||'<div class="small">没有商品</div>';
+      div.querySelector('.delbtn').addEventListener('click',async()=>{ await idbDelete(rec.id); renderRecords(); });
+      box.appendChild(div);
+    }
+  }catch(e){ box.innerHTML='<p class="small warn">读取已入库记录失败：'+esc(e&&e.message?e.message:e)+'</p>'; }
+}
+document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ const sb=$('saveBtn'); if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none'; } } });
+$('saveBtn').addEventListener('click',async()=>{
+  const rec=collectReceipt();
+  if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再入库。'; return; }
+  try{
+    await idbAdd(rec);
+    const cnt=rec.item_count;
+    const msg=`已入库 ✓ 共${cnt}件，总计 $${rec.total!==null?Number(rec.total).toFixed(2):'—'}`;
+    $('saveMsg').style.display='block'; $('saveMsg').textContent=msg;
+    const sb=$('saveBtn'); sb.disabled=true; sb.textContent='已入库 ✓';
+    await renderRecords();
+    $('recordsCard').scrollIntoView({behavior:'smooth'});
+    // re-show success after scroll target includes it? keep msg visible above
+    $('saveMsg').style.display='block';
+  }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='入库失败：'+(e&&e.message?e.message:e); }
+});
+$('refreshRecords').addEventListener('click',renderRecords);
+$('clearRecords').addEventListener('click',async()=>{ if(confirm('确定要清空全部已入库记录吗？清了就找不回来。')){ await idbClear(); renderRecords(); } });
+renderRecords();
 
 const _rb=$('retryPaddle');
 if(_rb) _rb.addEventListener('click',async()=>{
