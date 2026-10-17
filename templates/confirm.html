@@ -1,6 +1,7 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>请核对小票</title><link rel="stylesheet" href="/static/style.css"></head><body><main>
 <h1>第 2 步：请核对一下</h1>
+{% if d.engine %}<p>识别引擎：{{d.engine}}（数字不完整时已自动用第二引擎互证）</p>{% endif %}
 <p class="big">黄色底色的格子，识别不太有把握，请重点看看。<br>错了直接点格子修改。</p>
 <img class="receipt-img" src="/uploads/{{d.image_name}}" alt="小票照片">
 <form method="post">

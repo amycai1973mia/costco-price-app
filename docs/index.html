@@ -56,6 +56,7 @@ th,td{border-bottom:1px solid #ddd;padding:10px 6px;text-align:left;vertical-ali
   <table><thead><tr><th>代码</th><th>名称</th><th>价格</th></tr></thead><tbody id="items"></tbody></table>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
+  <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
   <p class="small">带 ⚠ 请核对 的地方，是程序没把握或没认出来的地方。这一版网页先能看、不能改，也不会导入数据库——就是给您试试识别效果。</p>
   <details><summary class="small">查看识别到的原始文字（核对用）</summary><pre id="raw" style="white-space:pre-wrap;font-size:14px"></pre></details>
 </div>
@@ -99,12 +100,62 @@ $('start').addEventListener('click',async()=>{
       if(scoreParsed(second.r)>scoreParsed(best.r)) best=second;
     }
     await worker.terminate();
+    _lastPrep=prep;
+    best=await tryPaddleFallback(prep,best,false);
+    _lastBest=best;
     render(best.r,best.text);
+    const rb=$('retryPaddle'); if(rb){ rb.style.display='block'; }
     $('status').textContent='识别完成，请往下核对结果'; $('bar').style.width='100%';
   }catch(err){
     $('status').textContent='识别没成功：'+(err&&err.message?err.message:err)+' 请换一张更清楚的照片再试。';
   }finally{ $('start').disabled=false; }
 });
+
+let _lastPrep=null, _lastBest=null, _paddleOcr=null;
+function paddleItemsToLines(items){
+  const toks=(items||[]).map(it=>{
+    const poly=it.poly||it.box||[]; let xs=[],ys=[];
+    if(Array.isArray(poly)) for(const pt of poly){ if(Array.isArray(pt)){xs.push(pt[0]);ys.push(pt[1]);} }
+    const cy=ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:0, cx=xs.length?Math.min(...xs):0, h=ys.length?(Math.max(...ys)-Math.min(...ys)):20;
+    return {text:String(it.text||'').trim(), conf:(typeof it.score==='number'?it.score:0.7), cx, cy, h};
+  }).filter(x=>x.text);
+  toks.sort((a,b)=>a.cy-b.cy||a.cx-b.cx);
+  const lines=[];
+  for(const tk of toks){
+    const tol=Math.max(15, tk.h*0.6);
+    if(lines.length && Math.abs(tk.cy-lines[lines.length-1].cy)<=tol) lines[lines.length-1].toks.push(tk);
+    else lines.push({cy:tk.cy,toks:[tk]});
+  }
+  return lines.map(ln=>{ const tk=[...ln.toks].sort((a,b)=>a.cx-b.cx); const valid=tk.filter(x=>x.text.length>=2).map(x=>x.conf); return {text:tk.map(x=>x.text).join(' '), conf: valid.length?Math.min(...valid):0.5}; });
+}
+async function ocrPaddle(prep){
+  $('status').textContent='正在下载更强的识别模型（第一次约30MB，要等一会儿，请不要关页面）…';
+  if(!_paddleOcr){
+    const mod=await import('https://cdn.jsdelivr.net/npm/@paddleocr/paddleocr-js@0.4.2/+esm');
+    _paddleOcr=await mod.PaddleOCR.create({lang:'en', ocrVersion:'PP-OCRv5', worker:false, ortOptions:{backend:'wasm'}});
+  }
+  $('status').textContent='正在用更强的识别再认一次，请稍等…';
+  const blob=await new Promise(r=>prep.grayCanvas.toBlob(r,'image/jpeg',0.92));
+  const [result]=await _paddleOcr.predict(blob);
+  const items=(result&&result.items)?result.items:(Array.isArray(result)?result:[]);
+  const lines=paddleItemsToLines(items);
+  const text=lines.map(l=>l.text).join('\n');
+  return {r:parseReceipt(lines), text};
+}
+async function tryPaddleFallback(prep, current, force){
+  const need = force || current.r.count_mismatch || current.r.total===null || current.r.product_count<3 || (current.r.amount_mismatch&&Math.abs(current.r.amount_diff)>1);
+  if(!need) return current;
+  try{
+    const second=await ocrPaddle(prep);
+    if(scoreParsed(second.r)>scoreParsed(current.r)) { second.engine='paddle'; return second; }
+    if(force) $('status').textContent='更强的识别这次没有更好，已保留第一次结果';
+    return current;
+  }catch(e){
+    if(force) $('status').textContent='更强的识别没能启动（网络或手机内存问题），已保留第一次结果';
+    return current;
+  }
+}
+
 function render(r,raw){
   $('result').style.display='block';
   const set=(id,v,conf)=>{ const w=warnCell(v,conf); const el=$(id); el.textContent=w.txt; el.className=w.bad?'warn':''; };
@@ -143,6 +194,16 @@ function render(r,raw){
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
 }
+
+const _rb=$('retryPaddle');
+if(_rb) _rb.addEventListener('click',async()=>{
+  if(!_lastPrep||!_lastBest) return;
+  _rb.disabled=true;
+  const better=await tryPaddleFallback(_lastPrep,_lastBest,true);
+  _lastBest=better; render(better.r,better.text);
+  $('status').textContent='已重新识别，请往下核对结果';
+  _rb.disabled=false;
+});
 </script>
 </body>
 </html>

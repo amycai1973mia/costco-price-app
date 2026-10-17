@@ -1,0 +1,4 @@
+# 可选第二引擎 PaddleOCR (PP-OCRv5 mobile) — 体积大 (~200MB+), 只在需要双引擎互证时装
+# 实测数字比 RapidOCR 略准 (见 OCR方案对比.md), 没装时程序自动只用 RapidOCR
+paddleocr==3.7.0
+paddlepaddle==3.3.1

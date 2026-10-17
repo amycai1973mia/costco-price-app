@@ -52,3 +52,40 @@
 - 改前（用户手机截图）：1/5 件，代码 326031→226031、价格 16.49→6.49，小计 90.91 对，总计缺失，件数 1≠5。
 - 改后：**5/5 件，代码 5/5 对，价格 5/5 对**，日期 2026-09-08 ✓、小计 90.91 ✓、总计 93.79 ✓（AMOUNT 印证）、件数 5=5 ✓、金额差 0.17（环保费+押金，页面已说明）；**门店仍未认出**（抬头行 OCR 文字太乱，无 #255）。名称：原始 OCR 有 CHICKEN ST、BAT、ORGANIGZHOMO 等错字/残缺，经模糊匹配全部纠正为 CHICKEN STRP、KS BATH、ORGANIC HOMO、CBTTA 9 GRN，PORK BELLY 原本就对——名称按新口径记为“5 件均可用（4 件自动纠正）”，不计入数字失败。
 - 注意：本机无头 Chrome 结果与用户手机仍可能有出入（机型、浏览器、光线、Tesseract 版本缓存），需用户用同一链接在手机上复测这张图确认。
+
+## 6. 开源 OCR 方案调研（2026-10-17 补充，GitHub API 当日实查）
+
+> Stars/许可证/最后推送为 2026-10-17 用 GitHub API 实查（`api.github.com/repos/...`），不是宣传页数字。模型大小查不到的写未查到。
+
+| 方案 | GitHub | Stars | 许可证 | 最后推送 | 模型/体积 | 浏览器/手机端 | 服务端 Python | 对我们小票的判断 |
+|---|---|---:|---|---|---|---|---|---|
+| PaddleOCR (PP-OCRv5/v6) | PaddlePaddle/PaddleOCR | 91,286 | Apache-2.0 | 2026-09-16 | v5 mobile det+rec 为小模型（具体 MB 未在仓库页查到统一数字）；v6 medium 34.5M 参数（官方 release） | ✅ 官方 `PaddleOCR.js`（`@paddleocr/paddleocr-js` 0.4.2，ONNX Runtime Web+OpenCV.js）；本次实测浏览器可跑，首次下载约 30MB | ✅ 本次已跑通（PP-OCRv5 mobile en） | **数字最准，采用**（见第 7 节） |
+| RapidOCR | RapidAI/RapidOCR | 8,169 | Apache-2.0 | 2026-10-17 | ONNX 小模型（源自 PaddleOCR 模型转换） | ⭕ 有 ONNX 模型理论可上 ONNX Runtime Web，但无官方浏览器 SDK，需自拼检测+识别管线 | ✅ 现电脑版主引擎 | 快、够准，保留做第一引擎 |
+| Tesseract (本体/js) | tesseract-ocr/tesseract | 77,045 | Apache-2.0 | 2026-10-10 | traineddata 每语言数 MB 级 | ✅ Tesseract.js（现网页版） | ✅ 可用 | 浏览器最省心但数字最弱，降为网页版后备 |
+| EasyOCR | JaidedAI/EasyOCR | 30,080 | Apache-2.0 | 2025-12-05 | PyTorch 模型较大（未查到统一大小） | ❌ 无官方浏览器方案 | ✅ 可跑但依赖 Torch、较重 | 本次未实测：维护放缓且与 Paddle 同类，Paddle 已胜出，不重复投入 |
+| docTR | mindee/doctr | 6,390 | Apache-2.0 | 2026-10-16 | PyTorch 文档 OCR | ❌ | ✅ | 本次未实测：偏欧文文档，小票长条英文数字场景无明显优于 Paddle 的证据，不为换而换 |
+| Surya | datalab-to/surya | 21,506 | 代码 Apache-2.0；**模型权重 modified OpenRAIL-M，商业使用有限制**（<$5M 免费，超出需商业授权，仓库自述） | 2026-09-11 | 650M 参数，需 vllm/llama.cpp 后端 | ❌ | ⭕ 重 | **不选**：权重商用限制+太重，不适合加拿大商业化 App 直接打包 |
+| TrOCR | microsoft/unilm（含 trocr；仓库 22,239 stars 为整个 unilm，非 TrOCR 单独） | 见左 | MIT（模型卡） | 2026-09-21（仓库） | Small 62M / Base 334M / Large 558M 参数，Base 权重约 2.7GB（HF 模型卡） | ⭕ Transformers.js 理论可行但模型大 | ⭕ 需先检测切单行 | **不选**：只认单行文本、需自备检测器，对整张长小票不直接可用 |
+
+注：EasyOCR/docTR 本次未逐一安装实测（时间和收益：PaddleOCR 与它们同为神经 OCR，Paddle 已在我们样本上数字全对，再测同类增量信息有限），如实说明，不编造其小票成绩。
+
+## 7. 开源三方实测（2026-10-17，同一批 5 张真票、同一预处理、同一解析规则）
+
+样本：1 件、11 件、8 件、13 件、5 件，共 **38 件商品**。真值经此前人工核对（件数/金额可交叉验证；13 件票 SHAKE'N FEED 代码以多引擎一致读数计，个别代码真值仍待更多样本复核）。方法：`tests/compare_engines.py`（Rapid/Paddle 同 Python 解析）+ Node Tesseract.js（JS 解析，规则已对齐）。
+
+| 引擎 | 抓到件数 | 代码对 | 价格对 | 日期 | 总计（有真值 4 张） | 门店 |
+|---|---:|---:|---:|---|---|---|
+| **PaddleOCR PP-OCRv5 mobile (en)** | 38/38 | **38/38** | **38/38** | 4/4 | **4/4** | 5/5 张读到 255（含截图票以原文为准） |
+| RapidOCR (现电脑版) | 38/38 | **38/38** | 36/38（695035 的 9.69、30859 的 6.99 两处价格缺失留空） | 4/4 | 4/4 | 同上 |
+| Tesseract.js (网页版引擎) | 36（含 3 件假行，实际对齐 33 件代码） | 33/38 | 31/38 | 4/4 | 0/4 | 多数没读出 |
+
+名称（单独口径，不混数字）：Paddle 名称整体也略好（PEROGIES 认对、ORGANIC 不再丢首字母），仍有 CHICKEN STRF、NxKS BATH、PORK ENDER 等 1–2 字母错，靠现有模糊纠正处理；Rapid 有 PEXOGIES/PRGANIC 类错；两者都不算数字失败。
+
+速度（本机）：Rapid 5 张约 6 秒；Paddle 5 张约 55 秒（含模型加载，单张约 8 秒级）；Tesseract.js 约 10 秒但准度垫底。Paddle 安装坑如实记录：PP-OCRv6 与 v5 server 模型在本机 CPU 触发 oneDNN `NotImplementedError`，关 `enable_mkldnn` 后 server 模型又内存爆（约 17GB 申请）；**mobile det+en mobile rec + enable_mkldnn=False 才稳定跑通**，电脑版接入即按此配置。
+
+## 8. 最终选型（开源线）
+
+- **电脑版：RapidOCR 第一引擎 + PaddleOCR 第二引擎互证（已接入 `ocr_parser.py`）**。Rapid 先跑；件数对不上/总计缺失/有商品价格留空时才跑 Paddle：先用 Paddle 同代码补 Rapid 缺的价格（不整行替换），Paddle 整体数字评分更高时才整表择优。确认页会显示引擎来源（如 `rapidocr+paddle(补价)`）。Paddle 为可选依赖（`requirements-paddle.txt`，体积大），没装自动退回单 Rapid，不影响主流程；可用 `COSTCO_DISABLE_PADDLE=1` 关闭。
+- 改后实测：8 件票 CBTTA 价格 6.99、11 件票 ORGANIC 价格 9.69 均被 Paddle 补上，两张票达到代码/价格全对；5 件票 Rapid 本已完整，未触发 Paddle、结果不变。旧样本无回归。
+- **网页版：Tesseract.js 保留默认 + PaddleOCR.js 自动后备（已接入 Pages）**。默认流程不变（快、下载小）；当件数对不上/总计缺失/只抓到 <3 件/金额差大时，自动下载 PaddleOCR.js 模型换引擎再认（首次约 30MB、无头桌面约 13 秒出结果，手机会更慢）；结果页另有“还是不准？换更强的识别再试一次”大按钮可手动强制再认，评分不更好则保留第一次结果。本机无头 Chrome 用 5 件原图验证：Paddle 版多认出门店 255，5 件代码/价格仍全对（其中 695035 代码尾 0 黏连已加自纠拆回）。
+- **手机端结论**：PaddleOCR.js 在浏览器**能跑通且明显更准**，但首次约 30MB 下载 + WASM 单线程（GitHub Pages 不能设 COOP/COEP 头做多线程）决定了它只适合做“认不好时的后备/重试”，不适合替换默认首认——老年用户第一次打开等几十 MB 容易以为坏了。原生 App 阶段再评估把 PP-OCRv5 mobile ONNX 模型打包进 App 本地跑（免下载、可控），那时它有机会做手机主引擎。

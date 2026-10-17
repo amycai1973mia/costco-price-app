@@ -41,6 +41,7 @@ cd /workspace/costco-price-app
   - 备用 OCR：Tesseract（装了才启用，`pytesseract` 调用）。
   - 解析规则（正则）：商店代码取 `#255` 并与 `Whse:255` 互相印证；日期取出现最多的 `YYYY/MM/DD`；商品行取行首数字代码 + 名称 + 第一个价格，`000039…` 开头判为折扣行记负数；有代码无价格的行不丢弃，价格留空并标低置信，提醒用户照小票填写。
   - **低置信提醒**：每个字段/每行都带置信度，低于 0.85 在确认页用黄底 +「⚠ 请重点核对」标出，这是保证最终准确的关键——机器先挑出没把握的地方，人只重点看这些。
+- **可选第二引擎 PaddleOCR（双保险）**：数字实测比 Rapid 略准（见 `OCR方案对比.md`）。装法：`.venv/bin/pip install -r requirements-paddle.txt`（体积大，可不装；没装自动只用 Rapid）。 Rapid 结果缺价格/总计或件数对不上时才会跑 Paddle 补价互证，确认页会显示引擎来源；设 `COSTCO_DISABLE_PADDLE=1` 可关。
 - **测试脚本**：`.venv/bin/python tests/run_ocr_test.py` 可对两张真实样本重跑识别并打印结果。
 
 ## 已知不足（实测，见项目根目录 TEST_RESULTS.md）

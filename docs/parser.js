@@ -143,7 +143,9 @@ function parseReceipt(inputLines){
     if(typeof price==='number' && isDisc) price=-Math.abs(price);
     if(typeof price==='number' && /\d\.\d{2}\s*-\s*(GP)?\s*$/.test(t) && price>0) price=-price;
     const [nm0,nameChanged]=cleanName(name.replace(/^[\*\%\#]+/,'').replace(/[\*]+$/,'').trim());
-    const fz=fuzzyCorrectName(nm0); const nm=fz.name;
+    let fz=fuzzyCorrectName(nm0); let nm=fz.name;
+    // 代码末位0其实是名称首字母O被黏进代码 (6950350RGANIC -> 695035 + ORGANIC): 候选更像已知商品才拆, 不乱改
+    if(/0$/.test(code||'') && nm0){ const cand=fuzzyCorrectName('O'+nm0); if(cand.similarity>fz.similarity && cand.similarity>=0.9){ code=String(code).slice(0,-1); nm=cand.name; fz={...cand,corrected:true}; } }
     // 名称小错不降低数字置信、不丢行: 数字(代码/价格)置信与名称分开
     if(nm.length<2) conf=Math.min(conf,0.5);
     let df=''; const md=name.match(/\/(\d{3,12})\b/); if(isDisc&&md) df=md[1];

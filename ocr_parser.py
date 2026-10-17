@@ -334,10 +334,85 @@ def parse_receipt(lines):
     return {"store_code":store,"store_confidence":store_conf,"purchase_date":purchase_date,"date_confidence":date_conf if purchase_date else 0.3,
             "total":total,"total_confidence":total_conf if total is not None else 0.3,"subtotal":subtotal,"items":items,"raw_lines":lines,"expected_item_count":expected_item_count,"product_count":product_count,"count_mismatch":count_mismatch}
 
+# --- 第二引擎 PaddleOCR (PP-OCRv5 mobile, 可选) 双保险 ---
+# 实测依据 (2026-10-17, 5张真票38件, 同预处理同解析): Paddle 数字 代码38/38 价格38/38,
+# RapidOCR 代码38/38 价格36/38, Tesseract.js 代码33/38 价格31/38。Paddle 更准但慢 (~8秒/张+模型加载),
+# 故只在 Rapid 结果数字不完整时才跑 Paddle 互证; 没装 paddle 时自动跳过, 不影响主流程。
+# 安装: pip install -r requirements-paddle.txt (体积大, 可选)。关掉: 环境变量 COSTCO_DISABLE_PADDLE=1
+_paddle_reader=None; _paddle_failed=False
+def _paddle_lines(image_path):
+    global _paddle_reader,_paddle_failed
+    if _paddle_failed or os.environ.get("COSTCO_DISABLE_PADDLE")=="1": return []
+    try:
+        if _paddle_reader is None:
+            from paddleocr import PaddleOCR
+            try:
+                _paddle_reader=PaddleOCR(lang='en', text_detection_model_name='PP-OCRv5_mobile_det', text_recognition_model_name='en_PP-OCRv5_mobile_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, enable_mkldnn=False)
+            except TypeError:
+                _paddle_reader=PaddleOCR(lang='en', text_detection_model_name='PP-OCRv5_mobile_det', text_recognition_model_name='en_PP-OCRv5_mobile_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)
+        res=_paddle_reader.predict(image_path)
+        toks=[]
+        for r in res:
+            for txt,sc,poly in zip(r['rec_texts'], r['rec_scores'], r['rec_polys']):
+                xs=[float(q[0]) for q in poly]; ys=[float(q[1]) for q in poly]
+                toks.append({"x":min(xs),"yc":sum(ys)/len(ys),"text":str(txt).strip(),"conf":float(sc)})
+        toks.sort(key=lambda z:(z["yc"],z["x"]))
+        lines=[]
+        for tk in toks:
+            # Paddle 右侧价格框 y 与名称框常差 ~20px, 容差30 (行距远大于此, 不会并错行)
+            if lines and abs(tk["yc"]-lines[-1]["yc"])<=30: lines[-1]["toks"].append(tk)
+            else: lines.append({"yc":tk["yc"],"toks":[tk]})
+        out=[]
+        for ln in lines:
+            tk=sorted(ln["toks"],key=lambda z:z["x"])
+            valid=[z["conf"] for z in tk if len(z["text"])>=2]
+            out.append({"text":" ".join(z["text"] for z in tk),"conf":round(min(valid) if valid else (tk[0]["conf"] if tk else 0.5),3),"y":int(ln["yc"])})
+        return out
+    except Exception:
+        _paddle_failed=True
+        return []
+
+def _parse_score(parsed):
+    s=parsed.get("product_count",0)*2
+    if parsed.get("expected_item_count") is not None and not parsed.get("count_mismatch"): s+=6
+    if parsed.get("total") is not None: s+=3
+    if parsed.get("store_code"): s+=2
+    if parsed.get("purchase_date"): s+=2
+    if parsed.get("subtotal") is not None: s+=2
+    for it in parsed.get("items",[]):
+        if it.get("price")=="": s-=1
+    return s
+
+def _needs_second(parsed):
+    if parsed.get("count_mismatch"): return True
+    if parsed.get("total") is None: return True
+    return any(it.get("price")=="" for it in parsed.get("items",[]))
+
 def recognize(src, work_dir):
     processed=os.path.join(work_dir,"processed.jpg")
     preprocess(src, processed)
     lines=ocr_lines(processed)
     parsed=parse_receipt(lines)
+    parsed["engine"]="rapidocr"
+    # 双保险: Rapid 数字不完整时才跑 Paddle (慢), 两边按数字完整度评分择优, 并用 Paddle 补 Rapid 缺的价格
+    if _needs_second(parsed):
+        plines=_paddle_lines(processed)
+        if plines:
+            pparsed=parse_receipt(plines)
+            # 先用 Paddle 同代码结果补 Rapid 的空价格 (不换整行, 名称仍以 Rapid 为主)
+            pmap={}
+            for it in pparsed["items"]:
+                if isinstance(it.get("price"),(int,float)): pmap.setdefault(it["item_code"],it["price"])
+            filled=False
+            for it in parsed["items"]:
+                if it.get("price")=="" and it["item_code"] in pmap:
+                    it["price"]=pmap[it["item_code"]]; it["confidence"]=min(it.get("confidence",0.5),0.65); filled=True
+            if filled: parsed["engine"]="rapidocr+paddle(补价)"
+            if _parse_score(pparsed)>_parse_score(parsed):
+                pparsed["engine"]="paddleocr(互证择优)"
+                pparsed["processed_image"]=processed
+                return pparsed
+            parsed["processed_image"]=processed
+            return parsed
     parsed["processed_image"]=processed
     return parsed
