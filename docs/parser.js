@@ -72,6 +72,16 @@ function parseReceipt(inputLines){
   for(const l of lines){ if(/\d{1,2}:\d{2}/.test(l.text)){ for(const m of l.text.matchAll(DATE_RE)){ if(+m[2]<=12&&+m[3]<=31){ const d=`${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`; auth[d]=(auth[d]||0)+1; } } } }
   if(Object.keys(auth).length){ purchaseDate=Object.entries(auth).sort((a,b)=>b[1]-a[1])[0][0]; dateConf=Math.max(dateConf,0.8); }
   let total=null,totalConf=0.5,subtotal=null;
+  // 费用类（2026-10-17 用户拍板改规则）：ENVIRO FEE / DEPOSIT 无商品代码、不算商品件数，单独收录为 fees，参与金额核对
+  const fees=[]; let tax=null, taxConf=0.5;
+  for(const l of lines){
+    const t=l.text, up=t.toUpperCase(), p=_price(t);
+    if(/ENVIR|DEP[OA0]SIT|DEPOSIT|\bPOSIT\b/i.test(t) && p!==null){
+      const fname=/ENVIR/i.test(t)?'ENVIRO FEE':'DEPOSIT';
+      if(!fees.some(f=>f.fee_name===fname && Math.abs(f.amount-p)<0.005)) fees.push({fee_name:fname,amount:p,confidence:l.conf??0.5,manual:false,kind:'fee'});
+    }
+    if(/\bTAX\b/.test(up) && !up.includes('NUMBER') && p!==null){ tax=p; taxConf=l.conf??0.5; }
+  }
   for(const l of lines){ const t=l.text, up=t.toUpperCase(), p=_price(t); if(p===null) continue;
     let lab=up.split(/\s+/)[0]? up.split(/\s+/)[0].replace(/[^A-Z]/g,'') : ''; lab=lab.replace(/1/g,'T').replace(/0/g,'O');
     if(lab.startsWith('SUBTOTA')||up.includes('SUBTOTAL')) subtotal=p;
@@ -106,10 +116,10 @@ function parseReceipt(inputLines){
       continue;
     }
     if(pending!==null){ pending=[pending[0],pending[1],pending[2],pending[3]+1]; if(pending[3]>2) pending=null; }
-    if(/ENVIRO|EPOSIT|DEPOSIT/i.test(t)){ pending=null; continue; }
+    if(/ENVIR|EPOSIT|DEP[OA0]SIT|DEPOSIT|\bPOSIT\b/i.test(t)){ pending=null; continue; } // 已在上方全局扫描收录为费用类，这里不当商品、金额不串给下一件
     if(/^20\d{2}[/\-]\d{1,2}[/\-]/.test(t)) continue; // 底部日期行不是商品
     // 行首杂字符 (Tesseract 常加 £/§/单个数字) 先剥掉; 代码与 **KS 这类符号黏连也要拆
-    let tt=t.replace(/^\S{1,3}\s+(?=\d{3,12}\b)/,'').replace(/^[^\dA-Za-z]{1,4}\s+(?=\d{3,12}\b)/,'').replace(/^\d\s+(?=\d{3,12}\b)/,'');
+    let tt=t.replace(/^\S{1,3}\s+[^\dA-Za-z]{1,3}\s+(?=\d{3,12}\b)/,'').replace(/^\S{1,3}\s+(?=\d{3,12}\b)/,'').replace(/^[^\dA-Za-z]{1,4}\s+(?=\d{3,12}\b)/,'').replace(/^\d\s+(?=\d{3,12}\b)/,'');
     let code=null,rest=null,qty=1,cap=1.0;
     const mDoz=tt.match(/^(\d{3})([1-9])\s+([A-Za-z].*(?:DOZ|EGGS).+)$/i);
     const mSp=tt.match(/^(\d{3,12})\s+(.+)$/);
@@ -172,9 +182,12 @@ function parseReceipt(inputLines){
   itemsSum=Math.round(itemsSum*100)/100;
   const amountDiff=(subtotal!==null&&subtotal!==undefined)? Math.round((subtotal-itemsSum)*100)/100 : null;
   const amountMismatch=(amountDiff!==null && Math.abs(amountDiff)>0.05);
-  return {items_sum:itemsSum,amount_diff:amountDiff,amount_mismatch:amountMismatch,store_code:store,store_confidence:storeConf,purchase_date:purchaseDate,date_confidence:purchaseDate?dateConf:0.3,total:total,total_confidence:total!==null?totalConf:0.3,subtotal:subtotal,items:merged,expected_item_count:expected,product_count:productCount,count_mismatch:expected!==null&&productCount!==expected};
+  const feesSum=Math.round(fees.reduce((a,f)=>a+(typeof f.amount==='number'?f.amount:0),0)*100)/100;
+  const fullSubSum=Math.round((itemsSum+feesSum)*100)/100;
+  const fullAmountDiff=(subtotal!==null&&subtotal!==undefined)? Math.round((subtotal-fullSubSum)*100)/100 : amountDiff;
+  return {items_sum:itemsSum,fees:fees,fees_sum:feesSum,tax:tax,tax_confidence:tax!==null?taxConf:0.3,full_sum:fullSubSum,amount_diff:fullAmountDiff,amount_mismatch:(()=>{ const fc=fullAmountCheck(itemsSum,feesSum,tax,subtotal,total); return fc.level==='warn_large'||fc.level==='mid'; })(),store_code:store,store_confidence:storeConf,purchase_date:purchaseDate,date_confidence:purchaseDate?dateConf:0.3,total:total,total_confidence:total!==null?totalConf:0.3,subtotal:subtotal,items:merged,expected_item_count:expected,product_count:productCount,count_mismatch:expected!==null&&productCount!==expected};
 }
-if(typeof module!=='undefined'&&module.exports) module.exports={parseReceipt,cleanName,dedupeMergeParts,seamRowMatch,amountCheck,fuzzyCorrectName};
+if(typeof module!=='undefined'&&module.exports) module.exports={parseReceipt,cleanName,dedupeMergeParts,seamRowMatch,amountCheck,fullAmountCheck,fuzzyCorrectName};
 
 // --- 多张接缝自动去重 + 金额闭环（用户要求：不能让用户手工删接缝重复）---
 // 规则：只有“前图末尾与后图开头连续多行顺序重合”才算接缝重复；买两件同款（如两件BOUNTY）
@@ -217,6 +230,34 @@ function amountCheck(itemsSum, subtotal, total){
   else { level='mid'; message='差额不算小也不算特别大，请扫一眼价格有没有认错一位'; }
   return {target:target,target_label:targetLabel,diff:diff,abs_diff:ad,large_threshold:largeThreshold,level:level,message:message};
 }
+// 完整金额核对：商品(+折扣) + 费用 + 税 应等于 TOTAL；商品+费用应等于 SUBTOTAL
+function fullAmountCheck(itemsSum, feesSum, tax, subtotal, total){
+  const items=Number(itemsSum)||0, fees=Number(feesSum)||0, tx=(tax===null||tax===undefined||tax==='')?null:Number(tax);
+  const calcSub=Math.round((items+fees)*100)/100;
+  if(total!==null && total!==undefined && total!==''){
+    const calcTotal=Math.round((calcSub+(tx||0))*100)/100;
+    const diff=Math.round((Number(total)-calcTotal)*100)/100, ad=Math.abs(diff);
+    const large=Math.max(3, Math.round(Number(total)*0.03*100)/100);
+    let level,message;
+    if(ad===0){level='exact';message='完全对上 ✓ 商品 + 费用 + 税 = 小票总计';}
+    else if(tx===null && diff>0 && ad<=Math.round(Number(total)*0.15*100)/100){level='tax_likely';message='税 TAX 还没认出来：差额多半是税 + 费用，请核对税那一栏';}
+    else if(ad<=1.00){level='ok_small';message='差额在 1 元以内，请扫一眼费用/税有没有漏填';}
+    else if(ad>large){level='warn_large';message='差额明显偏大：可能漏了一件、价格认错，或费用/税没填，请重点核对';}
+    else {level='mid';message='差额不算小，请扫一眼价格、费用和税有没有认错一位';}
+    return {target:Number(total),target_label:'小票总计 TOTAL',diff,abs_diff:ad,level,message,calc_subtotal:calcSub,calc_total:calcTotal,items_sum:items,fees_sum:fees,tax:tx,formula:`商品 $${items.toFixed(2)} + 费用 $${fees.toFixed(2)} + 税 $${(tx||0).toFixed(2)} = $${calcTotal.toFixed(2)}`};
+  }
+  if(subtotal!==null && subtotal!==undefined && subtotal!==''){
+    const diff=Math.round((Number(subtotal)-calcSub)*100)/100, ad=Math.abs(diff);
+    const large=Math.max(3, Math.round(Number(subtotal)*0.03*100)/100);
+    let level,message;
+    if(ad===0){level='exact';message='完全对上 ✓ 商品 + 费用 = 小票小计（总计还要再加税）';}
+    else if(ad<=1.00){level='ok_small';message='差额在 1 元以内，应是费用还没认全，请扫一眼';}
+    else if(ad>large){level='warn_large';message='差额明显偏大：可能漏了一件或价格认错，请重点核对';}
+    else {level='mid';message='差额不算小，请扫一眼';}
+    return {target:Number(subtotal),target_label:'小票小计 SUBTOTAL',diff,abs_diff:ad,level,message,calc_subtotal:calcSub,calc_total:null,items_sum:items,fees_sum:fees,tax:tx,formula:`商品 $${items.toFixed(2)} + 费用 $${fees.toFixed(2)} = $${calcSub.toFixed(2)}（小计口径，未加税）`};
+  }
+  return {target:null,target_label:null,diff:null,abs_diff:null,level:'none',message:'小票小计/总计没认出来，没法自动核对金额',calc_subtotal:calcSub,calc_total:null,items_sum:items,fees_sum:fees,tax:tx,formula:`商品 $${items.toFixed(2)} + 费用 $${fees.toFixed(2)} + 税 $${(tx||0).toFixed(2)}`};
+}
 function dedupeMergeParts(parts){
   parts=(parts||[]).filter(Boolean);
   let store='',storeConf=0.3,date='',dateConf=0.3,total=null,totalConf=0.3,subtotal=null,expected=null;
@@ -227,6 +268,8 @@ function dedupeMergeParts(parts){
     if(subtotal===null && r.subtotal!==null && r.subtotal!==undefined){ subtotal=r.subtotal; }
     if(r.expected_item_count!==null && r.expected_item_count!==undefined) expected=r.expected_item_count;
   }
+  const feesAll=[]; let taxMerged=null, taxConfM=0.3;
+  for(const r of parts){ for(const f of (r.fees||[])){ if(!feesAll.some(x=>x.fee_name===f.fee_name && Math.abs(Number(x.amount)-Number(f.amount))<0.005)) feesAll.push({...f}); } if(taxMerged===null && r.tax!==null && r.tax!==undefined){ taxMerged=r.tax; taxConfM=r.tax_confidence??0.5; } }
   const partItems=parts.map(r=>(r.items||[]).map(it=>({...it})));
   function assemble(ks){
     const items=[], removed=[], seams=[];
@@ -252,7 +295,8 @@ function dedupeMergeParts(parts){
   function stats(items){
     const pc=items.filter(it=>!it.is_discount).length;
     let s=0; for(const it of items){ if(typeof it.price==='number') s+=it.price; if(it.discount!==''&&typeof it.discount==='number') s+=it.discount; }
-    return {pc,sum:Math.round(s*100)/100};
+    const fs=Math.round(feesAll.reduce((a,f)=>a+(typeof f.amount==='number'?f.amount:0),0)*100)/100;
+    return {pc,sum:Math.round(s*100)/100,fees_sum:fs,full_sum:Math.round((s+fs)*100)/100};
   }
   // 枚举每道接缝的重叠长度，用件数+小计金额闭环选最优（不同重叠长度都试）
   let combos=[[]];
@@ -266,7 +310,7 @@ function dedupeMergeParts(parts){
     const a=assemble(ks); const st=stats(a.items); const overlapTotal=ks.reduce((x,y)=>x+y,0);
     const cand={ks,...a,...st,overlapTotal,
       countMismatch:expected!==null?Math.abs(st.pc-expected):null,
-      amountDiff:(subtotal!==null)?Math.round((subtotal-st.sum)*100)/100:null};
+      amountDiff:(subtotal!==null)?Math.round((subtotal-st.full_sum)*100)/100:null};
     cand.score = evidence ? ((cand.countMismatch||0)*100 + (cand.amountDiff!==null?Math.abs(cand.amountDiff):0)) : 0;
     cand.effectiveOverlap = ks.reduce((s,k)=>s+(k>=2?k:0),0);
     if(!best) best=cand;
@@ -275,8 +319,9 @@ function dedupeMergeParts(parts){
   }
   const items=best?best.items:[], removed=best?best.removed:[];
   const st=stats(items);
-  const ac=amountCheck(st.sum, subtotal, total);
-  return {items_sum:st.sum,amount_diff:(subtotal!==null?Math.round((subtotal-st.sum)*100)/100:ac.diff),amount_mismatch:ac.level==='warn_large'||ac.level==='mid',amount_check:ac,
+  const acFull=fullAmountCheck(st.sum, st.fees_sum, taxMerged, subtotal, total);
+  const ac=acFull;
+  return {items_sum:st.sum,fees:feesAll,fees_sum:st.fees_sum,tax:taxMerged,tax_confidence:taxConfM,full_sum:st.full_sum,amount_diff:acFull.diff,amount_mismatch:acFull.level==='warn_large'||acFull.level==='mid',amount_check:acFull,legacy_amount_check:amountCheck(st.sum, subtotal, total),
     store_code:store,store_confidence:storeConf,purchase_date:date,date_confidence:dateConf,
     total:total,total_confidence:totalConf,subtotal:subtotal,items:items,
     expected_item_count:expected,product_count:st.pc,count_mismatch:expected!==null&&st.pc!==expected,

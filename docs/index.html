@@ -59,6 +59,16 @@ tr.discrow td{padding:2px 3px 6px;border-bottom:1px solid #eee;background:#fff}
   .rowdelbtn{width:28px;font-size:24px}
 }
 .dupnote{font-size:15px;color:#8a6d00;background:#fff3a3;border-radius:8px;padding:6px;margin-top:6px}
+.albumbtn{background:#005daa!important}
+.addbtn{background:#eef4fb!important;color:#005daa!important;border:2px solid #005daa!important;font-size:21px!important;padding:14px}
+tr.manualrow td{background:#eaf3ff}
+.fee-manual{background:#eaf3ff}
+.manualtag{font-size:14px;color:#005daa;font-weight:700}
+#photoConfirm,#askMore,#donePanel{display:none;border:3px solid #005daa;border-radius:14px;padding:14px;margin:14px 0;background:#eef6ff}
+#donePanel{border-color:#0a7a42;background:#e6f4ea}
+#pendingImg{max-width:100%;border-radius:12px;margin:10px 0}
+.okbtn{background:#0a7a42!important}.retakebtn{background:#b58900!important}.morebtn{background:#0a7a42!important}
+table.fees{width:100%;border-collapse:collapse;table-layout:fixed} table.fees td{padding:5px 3px;border-bottom:1px solid #eee}
 </style>
 </head>
 <body>
@@ -68,12 +78,25 @@ tr.discrow td{padding:2px 3px 6px;border-bottom:1px solid #eee;background:#fff}
 
 <div class="card">
   <div class="big">第 1 步：拍照或从相册选小票（可以选多张）</div>
-  <p class="small">小票比较长、一次拍不下时，可以分成 2～3 张拍：先拍上半段，再拍下半段。全部选好后，再点第 2 步的大按钮一起识别、一起核对。</p>
+  <p class="small">小票比较长、一次拍不下时，可以分成 2～3 张拍：先拍上半段，再拍下半段。<b>拍照是一张一张来</b>：拍完一张先确认这张行不行，再问您还要不要再拍下一张；拍够了再一起识别。</p>
   <label class="filebtn cambtn" for="fileCamera">📷 拍照（打开相机，现场拍一张）</label>
   <input id="fileCamera" type="file" accept="image/*" capture="environment">
-  <label class="filebtn" for="fileAlbum">🖼 从相册选（打开相册，可以一次勾选多张）</label>
+  <label class="filebtn albumbtn" for="fileAlbum">🖼 从相册选（打开相册，可以一次勾选多张）</label>
   <input id="fileAlbum" type="file" accept="image/*" multiple>
-  <p class="small">两个入口分开：点绿色「📷 拍照」会打开相机，拍一张就加一张，可以连续拍；点蓝色「🖼 从相册选」打开相册，可以一次勾多张。选错了，在下面缩略图里点「删除这张」即可。</p>
+  <p class="small">两个入口分开：点绿色「📷 拍照」会打开相机，拍一张确认一张；点蓝色「🖼 从相册选」打开相册，可以一次勾多张。选错了，在下面缩略图里点「删除这张」即可。</p>
+  <div id="photoConfirm">
+    <div class="big">这张拍得行吗？</div>
+    <p class="small">请看清这张照片：小票字看得清、没有拍歪，就点「这张行」；不清楚就重拍。</p>
+    <img id="pendingImg" alt="刚刚拍的小票照片">
+    <button type="button" id="usePhoto" class="okbtn">✓ 这张行，用这张</button>
+    <button type="button" id="retakePhoto" class="retakebtn">↻ 不行，重拍这张</button>
+  </div>
+  <div id="askMore">
+    <div class="big" id="askMoreText">还要再拍一张吗？</div>
+    <p class="small">长小票还没拍完，就再拍下一段（记得和上一张留一点重叠）；已经拍够了，就开始识别。</p>
+    <button type="button" id="morePhoto" class="morebtn">📷 再拍一张</button>
+    <button type="button" id="donePhotos">✓ 拍够了，开始识别</button>
+  </div>
   <div id="thumbs" class="thumbs" aria-label="已选照片列表"></div>
   <div id="fname" class="small"></div>
   <div class="big" style="margin-top:16px">第 2 步：全部选好后一起识别</div>
@@ -90,6 +113,7 @@ tr.discrow td{padding:2px 3px 6px;border-bottom:1px solid #eee;background:#fff}
     <tr><th>门店代码</th><td><input class="field" id="store" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 255"></td></tr>
     <tr><th>购买日期</th><td><input class="field" id="date" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 2026/10/03"><div class="small">只打数字就行，不用打斜杠：打 20261003，会自动变成 2026/10/03。打错了按退格删掉重打。</div><div id="dateHint" class="small warn" style="display:none"></div></td></tr>
     <tr><th>小计 $</th><td><input class="field" id="subtotal" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 90.91"></td></tr>
+    <tr><th>税 TAX $</th><td><input class="field" id="tax" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 2.88"></td></tr>
     <tr><th>总计 $</th><td><input class="field" id="total" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 93.79"></td></tr>
     <tr><th>商品件数</th><td><input class="field" id="countInput" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 5"></td></tr>
   </table>
@@ -97,14 +121,25 @@ tr.discrow td{padding:2px 3px 6px;border-bottom:1px solid #eee;background:#fff}
   <p class="small">每件一行：代码、名称、金额都在一行，点一下就能改；代码和价格点一下会弹数字键盘。长小票分几张拍时，接缝处重复拍到的同一段，程序会自动认出并去掉，不用您手工删；下面会有一句提示告诉您自动去掉了几行。每行最右边的小 ✕ 只是您核对时改错用的（例如认多了一行才点它），不是让您去删接缝重复的。</p>
   <table class="items"><colgroup><col style="width:25%"><col style="width:43%"><col style="width:23%"><col style="width:9%"></colgroup><thead><tr><th>代码</th><th>名称</th><th>金额 $</th><th aria-label="删除"></th></tr></thead><tbody id="items"></tbody></table>
   <div id="undoBox"><button type="button" id="undoDel">↩ 恢复刚刚删掉的那一行</button></div>
+  <button type="button" id="addItemBtn" class="addbtn">＋ 加一行商品（小票上有、这里没认出来的，点这里手填）</button>
+  <h2 style="font-size:24px">费用（不是商品，不算件数）</h2>
+  <p class="small">环保费 ENVIRO FEE、押金 DEPOSIT 这类没有商品代码的费用，单独列在这里，和商品分开。识别不到也可以点下面按钮手加。</p>
+  <table class="fees"><colgroup><col style="width:52%"><col style="width:35%"><col style="width:13%"></colgroup><thead><tr><th>费用名称</th><th>金额 $</th><th aria-label="删除"></th></tr></thead><tbody id="fees"></tbody></table>
+  <button type="button" id="addFeeBtn" class="addbtn">＋ 加一行费用（环保费 / 押金手填）</button>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
+  <p id="fullAmount" class="big"></p>
   <div id="dedupBox"></div>
   <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
   <div class="big" style="margin-top:18px">第 4 步：核对无误才入库</div>
   <p class="small">没点下面这个按钮，就不会保存。这版先存在您手机浏览器本地（IndexedDB），照片和数据不上传服务器；后续正式 App 再对接云端。</p>
   <button id="saveBtn" class="savebtn">确认无误，入库</button>
   <div id="saveMsg" role="status"></div>
+  <div id="donePanel">
+    <div class="big" id="doneText">已入库 ✓</div>
+    <p class="small">这张小票已经存好了。下面点「返回主菜单」，本次照片和核对内容会清空，干干净净准备下一张；已入库的记录还在下面「已入库记录」里能查到。</p>
+    <button type="button" id="backHome" class="savebtn">🏠 返回主菜单（清空本次，准备下一张）</button>
+  </div>
   <details><summary class="small">查看识别到的原始文字（核对用）</summary><pre id="raw" style="white-space:pre-wrap;font-size:14px"></pre></details>
 </div>
 
@@ -153,8 +188,30 @@ function addFiles(fileList){
   }
   renderThumbs();
 }
-$('fileCamera').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; });
-$('fileAlbum').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; });
+let _pendingCapture=null;
+function showPendingCapture(file){
+  if(_pendingCapture) URL.revokeObjectURL(_pendingCapture.url);
+  _pendingCapture={file:file,url:URL.createObjectURL(file)};
+  $('pendingImg').src=_pendingCapture.url;
+  $('photoConfirm').style.display='block'; $('askMore').style.display='none';
+  $('photoConfirm').scrollIntoView({behavior:'smooth',block:'center'});
+}
+$('fileCamera').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) showPendingCapture(f); });
+$('fileAlbum').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; const am=$('askMore'); if(am) am.style.display='none'; });
+$('usePhoto').addEventListener('click',()=>{
+  if(!_pendingCapture) return;
+  selectedFiles.push({file:_pendingCapture.file,url:_pendingCapture.url}); _pendingCapture=null;
+  $('photoConfirm').style.display='none'; renderThumbs();
+  $('askMoreText').textContent=`已收好 ${selectedFiles.length} 张。还要再拍一张吗？`;
+  $('askMore').style.display='block'; $('askMore').scrollIntoView({behavior:'smooth',block:'center'});
+});
+$('retakePhoto').addEventListener('click',()=>{
+  if(_pendingCapture){ URL.revokeObjectURL(_pendingCapture.url); _pendingCapture=null; }
+  $('photoConfirm').style.display='none'; $('fileCamera').click();
+});
+$('morePhoto').addEventListener('click',()=>{ $('askMore').style.display='none'; $('fileCamera').click(); });
+$('donePhotos').addEventListener('click',()=>{ $('askMore').style.display='none'; if(selectedFiles.length&&!_ocrRunning) $('start').click(); });
+
 
 function mergeParsedReceipts(parts){
   // 自动接缝去重在 parser.js 的 dedupeMergeParts：前图末尾与后图开头连续重合才删，
@@ -326,6 +383,60 @@ function collectReceipt(){
   const cnt=numVal('countInput');
   return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,saved_at:new Date().toISOString()};
 }
+
+let _amountWarnArmed=false;
+function createItemRow(it){
+  const tb=$('items');
+  const tr=document.createElement('tr'); tr.className='itemrow'+(it.manual?' manualrow':'');
+  tr.innerHTML='<td><input class="field itemfield f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field itemfield f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field itemfield f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td style="text-align:center"><button type="button" class="rowdelbtn" aria-label="删除这行" title="删除这行">✕</button></td>';
+  const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
+  codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
+  if(it.manual){ tr.dataset.manual='1'; }
+  if(!it.manual && !/^\d{3,}$/.test(String(it.item_code))) codeEl.classList.add('warn');
+  if(!it.manual && it.price==='') priceEl.classList.add('warn');
+  const note=tr.querySelector('.noteTxt');
+  if(it.manual){ note.className='manualtag'; note.textContent='手填（您自己加的）'; }
+  else if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
+  else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
+  tr.querySelector('.rowdelbtn').addEventListener('click',()=>{
+    const discTr=(tr.nextElementSibling && tr.nextElementSibling.querySelector && tr.nextElementSibling.querySelector('.f-discount'))?tr.nextElementSibling:null;
+    const after=discTr?discTr.nextElementSibling:tr.nextElementSibling;
+    _lastDeleted={nodes:discTr?[tr,discTr]:[tr], after:after||null};
+    if(discTr) discTr.remove(); tr.remove();
+    const ub=$('undoBox'); if(ub) ub.style.display='block';
+    refreshCountAfterRowEdit();
+  });
+  tr.querySelectorAll('input').forEach(el=>el.addEventListener('input',()=>refreshCountAfterRowEdit()));
+  tb.appendChild(tr);
+  if(it.discount!==''&&it.discount!==undefined&&it.discount!==null){
+    const d=document.createElement('tr'); d.className='itemrow-discount discrow';
+    d.innerHTML='<td></td><td class="disc-label">↳ 折扣</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td><td></td>';
+    d.querySelector('.f-discount').value=Number(it.discount).toFixed(2);
+    d.querySelector('.f-discount').addEventListener('input',()=>refreshCountAfterRowEdit());
+    tr.dataset.hasDiscount='1'; tb.appendChild(d);
+  }
+  return tr;
+}
+function createFeeRow(f){
+  const tb=$('fees'); if(!tb) return null;
+  const tr=document.createElement('tr'); if(f.manual){ tr.className='fee-manual'; tr.dataset.manual='1'; }
+  tr.innerHTML='<td><input class="field itemfield f-fee-name" type="text" autocomplete="off" aria-label="费用名称"><div class="noteTxt"></div></td><td><input class="field itemfield f-fee-amount" inputmode="decimal" type="text" autocomplete="off" aria-label="费用金额" placeholder="例如 0.07"></td><td style="text-align:center"><button type="button" class="rowdelbtn" aria-label="删除这行费用" title="删除这行">✕</button></td>';
+  tr.querySelector('.f-fee-name').value=f.fee_name||f.item_name||'';
+  const amt=(f.amount===''||f.amount===null||f.amount===undefined)?(f.price===''||f.price===null||f.price===undefined?'':f.price):f.amount;
+  tr.querySelector('.f-fee-amount').value=(amt===''?'':Number(amt).toFixed(2));
+  if(f.manual){ const n=tr.querySelector('.noteTxt'); n.className='manualtag'; n.textContent='手填（您自己加的）'; }
+  tr.querySelector('.rowdelbtn').addEventListener('click',()=>{ tr.remove(); refreshCountAfterRowEdit(); });
+  tr.querySelectorAll('input').forEach(el=>el.addEventListener('input',()=>refreshCountAfterRowEdit()));
+  tb.appendChild(tr); return tr;
+}
+function sumsFromDOM(){
+  let items=0; document.querySelectorAll('#items tr.itemrow').forEach(tr=>{ const v=tr.querySelector('.f-price').value.trim(); if(v!=='') items+=Number(v)||0; });
+  document.querySelectorAll('#items .f-discount').forEach(el=>{ const v=el.value.trim(); if(v!=='') items+=Number(v)||0; });
+  let fees=0; document.querySelectorAll('#fees .f-fee-amount').forEach(el=>{ const v=el.value.trim(); if(v!=='') fees+=Number(v)||0; });
+  items=Math.round(items*100)/100; fees=Math.round(fees*100)/100;
+  return {items,fees,tax:numVal('tax'),subtotal:numVal('subtotal'),total:numVal('total')};
+}
+
 function render(r,raw){
   $('result').style.display='block';
   $('saveMsg').style.display='none'; const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库';
@@ -339,54 +450,19 @@ function render(r,raw){
   setNum('countInput',r.product_count, r.count_mismatch?0.3:0.99);
   _currentItems=r.items||[]; _expectedCount=(r.expected_item_count!==null&&r.expected_item_count!==undefined)?r.expected_item_count:null;
   const tb=$('items'); tb.innerHTML='';
-  if(!r.items.length) tb.innerHTML='<tr><td colspan="4" class="warn">一件商品都没认出来 ⚠ 请核对：请拍正、拍清楚再试</td></tr>';
-  let _prevItem=null;
-  for(const it of r.items){
-    const tr=document.createElement('tr'); tr.className='itemrow';
-    const numBad=(it.price===''||!/^\d{3,}$/.test(String(it.item_code)));
-    tr.innerHTML='<td><input class="field itemfield f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field itemfield f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field itemfield f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td style="text-align:center"><button type="button" class="rowdelbtn" aria-label="删除这行" title="删除这行">✕</button></td>';
-    const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
-    codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
-    if(!/^\d{3,}$/.test(String(it.item_code))) codeEl.classList.add('warn');
-    if(it.price==='') priceEl.classList.add('warn');
-    const note=tr.querySelector('.noteTxt');
-    if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
-    else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
-    tr.querySelector('.rowdelbtn').addEventListener('click',()=>{
-      const discTr=(tr.nextElementSibling && tr.nextElementSibling.querySelector && tr.nextElementSibling.querySelector('.f-discount'))?tr.nextElementSibling:null;
-      const after=discTr?discTr.nextElementSibling:tr.nextElementSibling;
-      _lastDeleted={nodes:discTr?[tr,discTr]:[tr], after:after||null};
-      if(discTr) discTr.remove();
-      tr.remove();
-      const ub=$('undoBox'); if(ub) ub.style.display='block';
-      refreshCountAfterRowEdit();
-    });
-    _prevItem=it;
-    tb.appendChild(tr);
-    if(it.discount!==''&&it.discount!==undefined&&it.discount!==null){
-      const d=document.createElement('tr'); d.className='itemrow-discount';
-      // discount belongs to previous item; store as hidden-ish editable row linked to previous item input via data on previous row
-      d.className='itemrow-discount discrow';
-      d.innerHTML='<td></td><td class="disc-label">↳ 折扣</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td><td></td>';
-      d.querySelector('.f-discount').value=Number(it.discount).toFixed(2);
-      // attach discount input to previous item row for collect: move node reference
-      tr.dataset.hasDiscount='1';
-      tb.appendChild(d);
-    }
-  }
-  document.querySelectorAll('#items input').forEach(el=>el.addEventListener('input',()=>refreshCountAfterRowEdit()));
-  // fix discount collection: discount inputs follow their item row in DOM order, handled in collect below
+  const fb=$('fees'); if(fb) fb.innerHTML='';
+  if($('donePanel')) $('donePanel').style.display='none';
+  _amountWarnArmed=false;
+  setNum('tax',(r.tax!==null&&r.tax!==undefined)?Number(r.tax).toFixed(2):'', (r.tax!==null&&r.tax!==undefined)?(r.tax_confidence??0.99):0.3);
+  if(!r.items.length) tb.innerHTML='<tr><td colspan="4" class="warn">一件商品都没认出来 ⚠ 请核对：请拍正、拍清楚再试，或点下面「＋ 加一行商品」手填</td></tr>';
+  for(const it of r.items) createItemRow(it);
+  for(const f of (r.fees||[])) createFeeRow(f);
   if(r.expected_item_count!==null&&r.expected_item_count!==undefined){
     if(!r.count_mismatch){ $('count').textContent=`件数核对：抓到 ${r.product_count} 件，和小票底部 ${r.expected_item_count} 件对上了 ✓`; $('count').className='big'; }
     else if(r.product_count<r.expected_item_count){ $('count').textContent=`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，还差 ${r.expected_item_count-r.product_count} 件，可能是中间有一段没拍到，请补拍中间那段（不用删任何行）`; $('count').className='big warn'; }
     else { $('count').textContent=`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，多了 ${r.product_count-r.expected_item_count} 件 ⚠ 可能是认多了或价格行被当成商品，请重点核对`; $('count').className='big warn'; }
-  } else $('count').textContent=`件数核对：抓到 ${r.product_count} 件商品（小票底部件数没认出来，没法自动核对）`;
-  const ac=r.amount_check||((typeof amountCheck==='function'&&r.items_sum!==undefined)?amountCheck(r.items_sum,r.subtotal,r.total):null);
-  if(ac&&ac.target!==null&&ac.target!==undefined){
-    const vsTotal=(r.total!==null&&r.total!==undefined&&Number(r.total)!==Number(ac.target))?('；程序加总 $'+Number(r.items_sum).toFixed(2)+' vs 小票总计 TOTAL $'+Number(r.total).toFixed(2)+'，差 $'+Math.abs(Number(r.total)-Number(r.items_sum)).toFixed(2)+'（总计含税，和小计比更准）'):'';
-    $('amount').textContent='金额核对：程序加总 $'+Number(r.items_sum).toFixed(2)+' vs '+(ac.target_label||'小票金额')+' $'+Number(ac.target).toFixed(2)+'，差 $'+Number(ac.abs_diff).toFixed(2)+'。'+ac.message+vsTotal;
-    $('amount').className=(ac.level==='warn_large')?'big warn':'small';
-  } else $('amount').textContent='金额核对：小票小计/总计没认出来，没法自动核对金额，请核对总计那一栏。';
+  } else $('count').textContent=`件数核对：抓到 ${r.product_count} 件商品（费用不算件数；小票底部件数没认出来，没法自动核对）`;
+  refreshAmountAfterRowEdit();
   // 自动去重汇总：只给一句人话 + 折叠详情，不逐行让用户删
   const db=$('dedupBox');
   if(db){
@@ -402,16 +478,22 @@ function render(r,raw){
 }
 let _lastDeleted=null;
 function refreshAmountAfterRowEdit(){
-  let sum=0;
-  document.querySelectorAll('#items tr.itemrow').forEach(tr=>{ const v=tr.querySelector('.f-price').value.trim(); if(v!=='') sum+=Number(v)||0; });
-  document.querySelectorAll('#items .f-discount').forEach(el=>{ const v=el.value.trim(); if(v!=='') sum+=Number(v)||0; });
-  sum=Math.round(sum*100)/100;
-  const sub=numVal('subtotal'), tot=numVal('total');
-  if(typeof amountCheck==='function'){
-    const ac=amountCheck(sum,sub,tot);
-    if(ac&&ac.target!==null&&ac.target!==undefined){ $('amount').textContent='金额核对：程序加总 $'+sum.toFixed(2)+' vs '+(ac.target_label||'小票金额')+' $'+Number(ac.target).toFixed(2)+'，差 $'+Number(ac.abs_diff).toFixed(2)+'。'+ac.message; $('amount').className=(ac.level==='warn_large')?'big warn':'small'; return; }
+  const sm=sumsFromDOM();
+  if(typeof fullAmountCheck==='function'){
+    const ac=fullAmountCheck(sm.items, sm.fees, sm.tax, sm.subtotal, sm.total);
+    const fa=$('fullAmount');
+    if(ac.target!==null&&ac.target!==undefined){
+      $('amount').textContent='金额核对：'+ac.formula+'， vs '+(ac.target_label||'小票金额')+' $'+Number(ac.target).toFixed(2)+'，差 $'+Number(ac.abs_diff).toFixed(2)+'。'+ac.message;
+      $('amount').className=(ac.level==='warn_large')?'big warn':'small';
+      if(fa){ if(ac.calc_total!==null){ fa.textContent=`最后核对：商品 $${sm.items.toFixed(2)} ＋ 费用 $${sm.fees.toFixed(2)} ＋ 税 $${(sm.tax||0).toFixed(2)} ＝ $${ac.calc_total.toFixed(2)}，${ac.target_label||'小票金额'} $${Number(ac.target).toFixed(2)}，差 $${Number(ac.abs_diff).toFixed(2)}`; } else { fa.textContent=`最后核对：商品 $${sm.items.toFixed(2)} ＋ 费用 $${sm.fees.toFixed(2)} ＝ $${ac.calc_subtotal.toFixed(2)}（税 $${(sm.tax||0).toFixed(2)} 另计，总计没认出来），${ac.target_label||'小票金额'} $${Number(ac.target).toFixed(2)}，差 $${Number(ac.abs_diff).toFixed(2)}`; } fa.className=(ac.level==='warn_large')?'big warn':'big'; }
+      return ac;
+    }
+    $('amount').textContent='金额核对：'+ac.formula+'（小票小计/总计没认出来，没法自动核对金额，请核对总计那一栏）。';
+    if(fa){ fa.textContent=`最后核对：商品 $${sm.items.toFixed(2)} ＋ 费用 $${sm.fees.toFixed(2)} ＋ 税 $${(sm.tax||0).toFixed(2)}（小票总计没认出来，没法对差）`; fa.className='big'; }
+    return ac;
   }
-  $('amount').textContent='金额核对：程序加总 $'+sum.toFixed(2)+'（小票小计/总计没认出来，没法自动核对金额，请核对总计那一栏）。';
+  $('amount').textContent='金额核对：商品加总 $'+sm.items.toFixed(2);
+  return null;
 }
 function refreshCountAfterRowEdit(){
   refreshAmountAfterRowEdit();
@@ -441,8 +523,13 @@ collectReceipt=function(){
     if(tr.classList.contains('itemrow')) idx++;
     else if(tr.querySelector('.f-discount') && idx>=0){ const dv=tr.querySelector('.f-discount').value.trim(); items[idx].discount=dv===''? '':Number(dv); }
   });
+  const fees=[];
+  document.querySelectorAll('#fees tr').forEach(tr=>{ const n=tr.querySelector('.f-fee-name'), a=tr.querySelector('.f-fee-amount'); if(!n||!a) return; const av=a.value.trim(); fees.push({fee_name:n.value.trim(),amount:av===''? '':Number(av),kind:'fee',manual:!!tr.dataset.manual}); });
+  // manual flag on items
+  document.querySelectorAll('#items tr.itemrow').forEach((tr,i)=>{ if(items[i]) items[i].manual=!!tr.dataset.manual; items[i].kind='item'; });
+  const sm=sumsFromDOM();
   const cnt=numVal('countInput');
-  return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,saved_at:new Date().toISOString()};
+  return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),tax:numVal('tax'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,fees:fees,fees_sum:sm.fees,items_sum:sm.items,saved_at:new Date().toISOString()};
 };
 // --- IndexedDB 本地入库 (纯静态网页, 不上传) ---
 function openDB(){ return new Promise((res,rej)=>{ const rq=indexedDB.open('costco-receipts',1); rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains('receipts')) db.createObjectStore('receipts',{keyPath:'id',autoIncrement:true}); }; rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
@@ -462,13 +549,15 @@ async function renderRecords(){
       const totalTxt=rec.total!==null&&rec.total!==undefined?('$'+Number(rec.total).toFixed(2)):'—';
       div.innerHTML=`<div class="big">${esc(rec.purchase_date||'日期没填')} · 门店 ${esc(rec.store_code||'—')} · ${esc(rec.item_count)} 件 · 总计 ${totalTxt}</div><details><summary class="small">展开看商品（${(rec.items||[]).length} 件）</summary><div class="itemsDetail"></div></details><button class="delbtn">删除这一条</button>`;
       const det=div.querySelector('.itemsDetail');
-      det.innerHTML=(rec.items||[]).map(it=>`<div class="small">${esc(it.item_code)} ${esc(it.item_name)} $${it.price===''?'—':Number(it.price).toFixed(2)}${it.discount!==''&&it.discount!==undefined?('（折扣 $'+Number(it.discount).toFixed(2)+'）'):''}</div>`).join('')||'<div class="small">没有商品</div>';
+      const feeHtml=(rec.fees||[]).map(f=>`<div class="small">费用 ${esc(f.fee_name)} $${f.amount===''||f.amount===undefined?'—':Number(f.amount).toFixed(2)}${f.manual?'（手填）':''}</div>`).join('');
+      const taxHtml=(rec.tax!==null&&rec.tax!==undefined)?`<div class="small">税 TAX $${Number(rec.tax).toFixed(2)}</div>`:'';
+      det.innerHTML=((rec.items||[]).map(it=>`<div class="small">${esc(it.item_code)} ${esc(it.item_name)} $${it.price===''?'—':Number(it.price).toFixed(2)}${it.manual?'（手填）':''}${it.discount!==''&&it.discount!==undefined&&it.discount!==''?('（折扣 $'+Number(it.discount).toFixed(2)+'）'):''}</div>`).join('')||'<div class="small">没有商品</div>')+feeHtml+taxHtml;
       div.querySelector('.delbtn').addEventListener('click',async()=>{ await idbDelete(rec.id); renderRecords(); });
       box.appendChild(div);
     }
   }catch(e){ box.innerHTML='<p class="small warn">读取已入库记录失败：'+esc(e&&e.message?e.message:e)+'</p>'; }
 }
-document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ const sb=$('saveBtn'); if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none'; } } });
+document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ _amountWarnArmed=false; const sb=$('saveBtn'); if(sb&&!sb.disabled) sb.textContent='确认无误，入库'; if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none'; const dp=$('donePanel'); if(dp) dp.style.display='none'; } if(['subtotal','tax','total'].includes(e.target.id)) refreshAmountAfterRowEdit(); } });
 const _ub=$('undoDel'); if(_ub) _ub.addEventListener('click',()=>{
   if(!_lastDeleted) return;
   const tb=$('items'); const ref=(_lastDeleted.after&&_lastDeleted.after.parentNode===tb)?_lastDeleted.after:null;
@@ -476,19 +565,45 @@ const _ub=$('undoDel'); if(_ub) _ub.addEventListener('click',()=>{
   _lastDeleted=null; const ub=$('undoBox'); if(ub) ub.style.display='none';
   refreshCountAfterRowEdit();
 });
+$('addItemBtn').addEventListener('click',()=>{ const tr=createItemRow({item_code:'',item_name:'',price:'',discount:'',manual:true}); refreshCountAfterRowEdit(); const c=tr&&tr.querySelector('.f-code'); if(c) c.focus(); });
+$('addFeeBtn').addEventListener('click',()=>{ const tr=createFeeRow({fee_name:'',amount:'',manual:true}); refreshCountAfterRowEdit(); const c=tr&&tr.querySelector('.f-fee-name'); if(c) c.focus(); });
+function resetToHome(){
+  for(const e of selectedFiles){ try{URL.revokeObjectURL(e.url);}catch(_){} } selectedFiles=[];
+  if(_pendingCapture){ try{URL.revokeObjectURL(_pendingCapture.url);}catch(_){} _pendingCapture=null; }
+  _lastPrep=null; _lastBest=null; _lastPreps=[]; _lastParts=[]; _lastRawParts=[]; _expectedCount=null; _lastDeleted=null; _currentItems=[]; _amountWarnArmed=false;
+  $('photoConfirm').style.display='none'; $('askMore').style.display='none'; $('donePanel').style.display='none';
+  $('result').style.display='none'; $('items').innerHTML=''; const fb=$('fees'); if(fb) fb.innerHTML='';
+  for(const id of ['store','date','subtotal','tax','total','countInput']){ const el=$(id); if(el){ el.value=''; el.classList.remove('warn'); } }
+  $('raw').textContent=''; $('count').textContent=''; $('amount').textContent=''; const fa=$('fullAmount'); if(fa) fa.textContent='';
+  $('bar').style.width='0%'; $('status').textContent='还没有选照片：请先点「📷 拍照」或「🖼 从相册选」';
+  const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none';
+  renderThumbs(); renderRecords(); window.scrollTo({top:0,behavior:'smooth'});
+}
+$('backHome').addEventListener('click',resetToHome);
 $('saveBtn').addEventListener('click',async()=>{
   const rec=collectReceipt();
   if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再入库。'; return; }
+  // 金额对不上：先提醒差多少，不硬卡死；用户再点一次确认仍可入库
+  const sm=sumsFromDOM();
+  if(typeof fullAmountCheck==='function' && sm.total!==null){
+    const ac=fullAmountCheck(sm.items, sm.fees, sm.tax, sm.subtotal, sm.total);
+    if(ac && ac.abs_diff>1.00 && !_amountWarnArmed){
+      _amountWarnArmed=true;
+      $('saveMsg').style.display='block';
+      $('saveMsg').textContent=`金额对不上：${ac.formula}，和票面总计差 $${Number(ac.abs_diff).toFixed(2)}。请先核对；如果您确认没问题，再点一次「确认仍要入库」就会存。`;
+      const sb=$('saveBtn'); sb.textContent='确认仍要入库（金额差 $'+Number(ac.abs_diff).toFixed(2)+'）';
+      $('saveMsg').scrollIntoView({behavior:'smooth',block:'center'}); return;
+    }
+  }
   try{
     await idbAdd(rec);
     const cnt=rec.item_count;
     const msg=`已入库 ✓ 共${cnt}件，总计 $${rec.total!==null?Number(rec.total).toFixed(2):'—'}`;
     $('saveMsg').style.display='block'; $('saveMsg').textContent=msg;
     const sb=$('saveBtn'); sb.disabled=true; sb.textContent='已入库 ✓';
+    const dp=$('donePanel'); if(dp){ $('doneText').textContent=msg+' —— 这张办完了'; dp.style.display='block'; }
     await renderRecords();
-    $('recordsCard').scrollIntoView({behavior:'smooth'});
-    // re-show success after scroll target includes it? keep msg visible above
-    $('saveMsg').style.display='block';
+    if(dp) dp.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='入库失败：'+(e&&e.message?e.message:e); }
 });
 $('refreshRecords').addEventListener('click',renderRecords);
