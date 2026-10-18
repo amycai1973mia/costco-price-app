@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block body %}
+<h1>运营后台（只有运营者能看）</h1>
+<p class="big">用户共 {{ stats.users }} 人 · 订阅中 {{ stats.active_sub }} 人 · 小票 {{ stats.receipts }} 张 · 后台打折 {{ stats.deals }} 条 · 提醒 {{ stats.alerts }} 条</p>
+<h2>用户管理</h2>
+{% for u in users %}<div class="record"><b>{{ u.email }}</b> {{ u.display_name or '' }} · 角色 {{ u.role }} · 注册 {{ u.created_at }} · 订阅：{{ u.subscription_status }}{% if u.subscription_plan %}（{{ u.subscription_plan }}）{% endif %}
+<form method="post" action="/admin/users/{{ u.id }}/subscription"><label>订阅状态 <select name="subscription_status" style="font-size:20px;padding:10px">{% for s in ['free','trial','active','expired','cancelled'] %}<option {% if u.subscription_status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+<label>套餐 <input name="subscription_plan" value="{{ u.subscription_plan or '' }}"></label><label>到期日 <input name="subscription_expires_at" type="date" value="{{ u.subscription_expires_at or '' }}"></label><button type="submit">保存订阅</button></form>
+<form method="post" action="/admin/users/{{ u.id }}/reset-password"><label>设临时密码（本地版由管理员线下告诉用户；正式版走邮件重置）<input name="temp_password" type="text"></label><button type="submit">重置密码</button></form></div>{% endfor %}
+<h2>导入打折商品（后台库，客户看不到全量）</h2>
+<p>上传 CSV/JSON 文件，或直接粘贴。字段：代码/名称/原价/折后/省/门店/起止日期（表头可用英文 item_code,item_name,original_price,sale_price,savings,store_code,start_date,end_date，也可用中文）。导入后会自动为所有用户检查生成提醒。示例文件见仓库 sample_data/sample_deals.csv（明确为示例数据）。</p>
+<form method="post" action="/admin/deals/import" enctype="multipart/form-data">
+<label>选文件 <input type="file" name="deals_file" accept=".csv,.json,.txt"></label>
+<label>或粘贴内容 <textarea name="deals_text" rows="8" style="width:100%;font-size:18px"></textarea></label>
+<button class="confirm-btn" type="submit">导入打折数据</button></form>
+<h2>最近导入批次</h2>{% for b in batches %}<p>#{{ b.id }} {{ b.import_date }} 来源 {{ b.source }} 共 {{ b.item_count }} 条</p>{% else %}<p>还没有导入过。</p>{% endfor %}
+<h2>最近打折商品（仅后台看）</h2><table><tr><th>代码</th><th>名称</th><th>原价</th><th>折后</th><th>门店</th><th>日期</th></tr>{% for d in deals %}<tr><td>{{ d.item_code }}</td><td>{{ d.item_name }}</td><td>{{ d.original_price }}</td><td>{{ d.sale_price }}</td><td>{{ d.store_code }}</td><td>{{ d.start_date }}~{{ d.end_date }}</td></tr>{% endfor %}</table>
+{% endblock %}

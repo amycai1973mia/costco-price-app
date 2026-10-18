@@ -4,3 +4,4 @@ __pycache__/
 data/
 uploads/
 .DS_Store
+uploads_main/

@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<h1>{{ '注册新账号' if mode=='register' else '登录' }}</h1>
+<form method="post">
+<label>邮箱 <input name="email" type="email" required></label>
+{% if mode=='register' %}<label>你的名字（可不填）<input name="display_name"></label>{% endif %}
+<label>密码 <input name="password" type="password" required></label>
+<button class="confirm-btn" type="submit">{{ '注册并登录' if mode=='register' else '登录' }}</button>
+</form>
+{% if mode=='login' %}<a class="second-btn" href="/register">还没有账号？点这里注册</a><p class="hint">忘记密码请联系运营者，在后台帮你重置（正式版会用邮件重置）。</p>
+{% else %}<a class="second-btn" href="/login">已有账号？点这里登录</a>{% endif %}
+{% endblock %}

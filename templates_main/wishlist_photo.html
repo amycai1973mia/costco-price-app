@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block body %}
+<h1>识别到的商品，勾选要加入待购的</h1>
+{% for it in items %}<div class="item"><b>{{ it.item_name }}</b>（{{ it.item_code }}） ${{ it.price }}
+<form method="post" action="/wishlist/add"><input type="hidden" name="item_code" value="{{ it.item_code }}"><input type="hidden" name="item_name" value="{{ it.item_name }}"><input type="hidden" name="source" value="photo"><button class="second-btn" type="submit">＋ 加入待购</button></form></div>
+{% else %}<p class="big">没识别出商品，请回去用手工填写。</p>{% endfor %}
+<a class="second-btn" href="/wishlist">返回待购清单</a>
+{% endblock %}

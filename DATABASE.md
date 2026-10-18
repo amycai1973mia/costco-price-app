@@ -1,7 +1,7 @@
 # Costco 小票 App — 本地数据库说明（DATABASE）
 
 > 建立日期：2026-10-18（America/Vancouver）
-> 状态：**只建好本地库结构，未开发完整功能**。线上网页版（docs/，GitHub Pages）逻辑未改，仍用浏览器 IndexedDB；电脑版 Flask 原型仍用旧库。把 App 接到本库是后续工作。
+> 状态：2026-10-18 已在此库上建成**本地先行版主程序** `app_main.py`（注册/登录、小票确认入库、待购、历史查询、后台打折导入、三类提醒、运营后台，详见本文第 6 节与 TEST_RESULTS 记录55）。线上网页版（docs/，GitHub Pages）逻辑未改，仍用浏览器 IndexedDB；旧电脑版 Flask 原型仍用旧库 `app.py`。
 
 ## 1. 两个数据库文件的区别（别弄混）
 
@@ -65,4 +65,23 @@ GROUP BY i.item_code, i.item_name;
 
 ## 5. 尚未开发（如实标注）
 
-以下只是**建好了表**，功能都还没做：注册/登录与密码重置流程、订阅收费、待购三种录入界面、打折数据每天 Bot 收集导入、匹配与提醒发送、历史查询界面、云端部署（Google Cloud / Azure / AWS 待定）。详见 PROGRESS.md。
+本地先行版已做（见第 6 节）：注册/登录、待购三种录入、后台打折 CSV/JSON 导入、代码匹配三类提醒、历史查询界面、运营后台用户/订阅/管理员设临时密码。
+**仍未做**：打折数据每天/每周 Bot 自动收集（现为管理员手动导入）、订阅收费支付、自助改密与邮件密码重置（本地版由管理员设临时密码）、正式手机 App、云端部署（Google Cloud / Azure / AWS 待定）、提醒推送（现为站内提醒页）。详见 PROGRESS.md。
+
+## 6. 怎么启动正式程序（本地先行版）
+
+入口是新文件 `app_main.py`（不要用旧 `app.py`，那是旧库原型）：
+
+```bash
+cd /workspace/costco-price-app
+./run_main.sh
+# 或: .venv/bin/python app_main.py
+```
+
+浏览器打开 **http://127.0.0.1:5004**（端口可用环境变量 COSTCO_MAIN_PORT 改）。先注册一个普通账号即可使用。
+
+创建运营者(admin)账号（二选一，密码都不写进代码/仓库）：
+- 交互：`.venv/bin/python init_admin.py`，按提示输邮箱和密码；
+- 或首次启动前设环境变量 `COSTCO_ADMIN_EMAIL` + `COSTCO_ADMIN_PASSWORD`（库中无管理员时自动创建）。
+
+打折示例数据：`sample_data/sample_deals.csv`（**明确为示例**，含真实样本小票的 3 个商品代码便于测试对比），在运营后台粘贴/上传导入，导入后自动为全体用户生成提醒；用户也可在「我的提醒」页点「检查最新打折提醒」。自测脚本：`.venv/bin/python tests/test_main_app.py --ocr`（TEST 账号，测完自动清理）。

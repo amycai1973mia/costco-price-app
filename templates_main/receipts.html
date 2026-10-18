@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block body %}
+<h1>我的小票</h1>
+{% for r, items in receipts %}
+<div class="record"><b>{{ r.purchase_date }}</b> 门店 {{ r.store_code or '?' }} · 共 {{ r.item_count }} 件 · 总计 ${{ '%.2f'|format(r.total or 0) }}
+<table>{% for it in items %}<tr><td>{{ it.item_code }}</td><td>{{ it.item_name }}{% if it.is_manual %}（手填）{% endif %}{% if it.discount %}<div class="fee">↳ 折扣 {{ it.discount }}</div>{% endif %}{% if it.enviro_fee %}<div class="fee">↳ 环保费 {{ it.enviro_fee }}</div>{% endif %}{% if it.deposit %}<div class="fee">↳ 押金 {{ it.deposit }}</div>{% endif %}</td><td>${{ '%.2f'|format(it.price or 0) }}</td></tr>{% endfor %}</table></div>
+{% else %}<p class="big">还没有入库的小票。先去首页拍一张吧。</p>{% endfor %}
+{% endblock %}

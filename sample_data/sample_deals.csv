@@ -1,0 +1,5 @@
+item_code,item_name,original_price,sale_price,savings,province,store_code,start_date,end_date
+1412124,QUICK OATS（示例）,11.99,8.99,3.00,BC,255,2026-10-15,2026-10-28
+1694477,PEROGIES（示例）,16.99,12.99,4.00,BC,255,2026-10-15,2026-10-28
+695035,ORGANIC HOMO（示例）,9.69,6.69,3.00,BC,255,2026-10-15,2026-10-28
+9990001,TEST待购商品（示例）,20.00,15.00,5.00,BC,255,2026-10-15,2026-10-28

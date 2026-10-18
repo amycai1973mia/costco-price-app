@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block body %}
+<h1>查询以前买过的商品</h1>
+<form method="get">
+<label>开始日期 <input name="date_from" type="date" value="{{ q.date_from }}"></label>
+<label>结束日期 <input name="date_to" type="date" value="{{ q.date_to }}"></label>
+<label>商品名称关键词 <input name="keyword" value="{{ q.keyword }}" placeholder="例如 BOUNTY"></label>
+<label>商品代码 <input name="code" value="{{ q.code }}" inputmode="numeric" placeholder="例如 1412124"></label>
+<button class="confirm-btn" type="submit">🔍 查询</button></form>
+{% if summary %}<h2>汇总（买过几次 / 上次价格）</h2><table><tr><th>代码</th><th>名称</th><th>买过几次</th><th>上次日期</th><th>上次价格</th><th></th></tr>
+{% for s in summary %}<tr><td>{{ s.item_code }}</td><td>{{ s.item_name }}</td><td>{{ s.count }}</td><td>{{ s.last_date }}</td><td>${{ '%.2f'|format(s.last_price or 0) }}</td>
+<td><form method="post" action="/wishlist/add"><input type="hidden" name="item_code" value="{{ s.item_code }}"><input type="hidden" name="item_name" value="{{ s.item_name }}"><input type="hidden" name="source" value="history"><button type="submit">加入待购</button></form></td></tr>{% endfor %}</table>{% endif %}
+{% if rows %}<h2>明细</h2><table><tr><th>日期</th><th>门店</th><th>代码</th><th>名称</th><th>价格</th></tr>
+{% for r in rows %}<tr><td>{{ r.purchase_date }}</td><td>{{ r.store_code }}</td><td>{{ r.item_code }}</td><td>{{ r.item_name }}</td><td>${{ '%.2f'|format(r.price or 0) }}</td></tr>{% endfor %}</table>
+{% elif searched %}<p class="big">没有查到，换个关键词试试。</p>{% endif %}
+{% endblock %}

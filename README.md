@@ -62,3 +62,16 @@ cd /workspace/costco-price-app
 | `data/costco.db` | SQLite 数据库（确认后才写入） |
 | `uploads/` | 用户上传的小票照片 |
 | `tests/run_ocr_test.py` | 两张真实样本的识别复测脚本 |
+
+## 正式程序（本地先行版，2026-10-18 新增）
+
+新入口 **`app_main.py`**，使用新库 `data/costco_app.db`（8 张表），旧 `app.py`（旧库）和线上 Pages 网页版不变。
+
+```bash
+cd /workspace/costco-price-app
+./run_main.sh          # 打开 http://127.0.0.1:5004
+.venv/bin/python init_admin.py   # 创建运营者账号（交互输密码，不写进代码）
+.venv/bin/python tests/test_main_app.py --ocr   # 全流程自测（TEST账号，测完自动清理）
+```
+
+功能：注册/登录、拍照识别→核对（即时小计）→确认入库、手工录入小票、历史查询（日期/名称/代码+汇总）、待购清单（手工/从历史/拍照）、我的提醒（导入打折后自动生成，也可手动检查；待购打折/30天价保/超30天补货）、运营后台（用户/订阅/设临时密码、打折 CSV/JSON 导入）。示例打折数据在 `sample_data/sample_deals.csv`（示例，非真实采集）。详见 DATABASE.md 第 6 节。

@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% block body %}
+<h1>请核对小票</h1>
+{% if d.error %}<p class="warn-tag">识别出了点问题（{{ d.error }}），请照小票手工填写下面内容。</p>{% endif %}
+<p class="big">黄色/不确定的地方请重点看，错了直接点格子改。改任何数字，下面的录入总计会马上跟着变。</p>
+{% if d.image_name %}<img class="receipt-img" src="/uploads_main/{{ d.image_name }}" alt="小票照片">{% endif %}
+<form method="post" id="rform">
+<label>门店代码 <input name="store_code" value="{{ d.store_code or '' }}" inputmode="numeric"></label>
+<label>购买日期 <input name="purchase_date" value="{{ d.purchase_date or '' }}" placeholder="2026-10-08"></label>
+<label>商品小计（可留空，程序自动算）<input name="subtotal" id="f-subtotal" value="{{ d.subtotal if d.subtotal is not none else '' }}" inputmode="decimal"></label>
+<label>费用合计 环保费+押金（可留空自动算）<input name="fees_total" id="f-fees" value="{{ d.fees_total or '' }}" inputmode="decimal"></label>
+<label>税 TAX <input name="tax" id="f-tax" value="{{ d.tax or '' }}" inputmode="decimal"></label>
+<label>小票总计 TOTAL <input name="total" id="f-total" value="{{ d.total if d.total is not none else '' }}" inputmode="decimal"></label>
+<h2>商品（按小票顺序，折扣和费用跟在所属商品下面）</h2>
+<div id="items">
+{% for it in d['items'] if not it.is_discount %}
+<div class="item">
+<label>商品代码 <input name="item_code" value="{{ it.item_code }}" inputmode="numeric"></label>
+<label>商品名称 <input name="item_name" value="{{ it.item_name }}"></label>
+<label>价格 <input name="item_price" class="calc" value="{{ it.price }}" inputmode="decimal"></label>
+<label>数量 <input name="item_qty" value="{{ it.quantity or 1 }}" inputmode="numeric"></label>
+<div class="fee">↳ 折扣（没有就留 0）<input name="item_discount" class="calc" value="{{ it.discount if it.discount is not none and it.discount!='' else 0 }}" style="width:160px" inputmode="decimal"></div>
+<div class="fee">↳ 环保费 <input name="item_enviro_fee" class="calc" value="{{ it.enviro_fee or 0 }}" style="width:140px" inputmode="decimal"> 押金 <input name="item_deposit" class="calc" value="{{ it.deposit or 0 }}" style="width:140px" inputmode="decimal"></div>
+<input type="hidden" name="item_is_manual" value="{{ 1 if it.is_manual else 0 }}">
+<label class="del">不要这一行 <input type="checkbox" name="delete_item" value="{{ loop.index0 }}"></label>
+</div>
+{% endfor %}
+</div>
+<button type="button" class="second-btn" onclick="addRow()">＋ 加一行商品（小票上有但没认出的，手填）</button>
+<p class="big" style="background:#fff;padding:14px;border-radius:10px">小计核对：录入商品小计 <b id="s-sub">$0.00</b> ＋ 费用 <b id="s-fee">$0.00</b> ＋ 税 <b id="s-tax">$0.00</b> ＝ 录入总计 <b id="s-tot">$0.00</b><br>与小票总计差：<b id="s-diff">-</b></p>
+<button class="confirm-btn" type="submit">✅ 确认无误，入库</button>
+<a class="second-btn" href="/" style="color:#b00020;border-color:#b00020">识别太差，重新再来（放弃这次）</a>
+</form>
+<template id="rowtpl"><div class="item" style="background:#eaf2ff"><p>手填行</p>
+<label>商品代码 <input name="item_code" inputmode="numeric"></label><label>商品名称 <input name="item_name"></label>
+<label>价格 <input name="item_price" class="calc" inputmode="decimal"></label><label>数量 <input name="item_qty" value="1" inputmode="numeric"></label>
+<div class="fee">↳ 折扣 <input name="item_discount" class="calc" value="0" style="width:160px" inputmode="decimal"></div>
+<div class="fee">↳ 环保费 <input name="item_enviro_fee" class="calc" value="0" style="width:140px" inputmode="decimal"> 押金 <input name="item_deposit" class="calc" value="0" style="width:140px" inputmode="decimal"></div>
+<input type="hidden" name="item_is_manual" value="1"><label class="del">不要这一行 <input type="checkbox" name="delete_item" value=""></label></div></template>
+<script>
+function vals(n){return [...document.querySelectorAll('[name="'+n+'"]')].map(e=>parseFloat(e.value)||0)}
+function recalc(){let items=[...document.querySelectorAll('#items .item')];let sub=0,fee=0;
+ items.forEach((it,i)=>{let del=it.querySelector('[name=delete_item]');if(del&&del.checked)return;
+  sub+=(parseFloat(it.querySelector('[name=item_price]').value)||0)+(parseFloat(it.querySelector('[name=item_discount]').value)||0);
+  fee+=(parseFloat(it.querySelector('[name=item_enviro_fee]').value)||0)+(parseFloat(it.querySelector('[name=item_deposit]').value)||0);});
+ let tax=parseFloat(document.getElementById('f-tax').value)||0;let tot=parseFloat(document.getElementById('f-total').value)||0;
+ document.getElementById('s-sub').textContent='$'+sub.toFixed(2);document.getElementById('s-fee').textContent='$'+fee.toFixed(2);
+ document.getElementById('s-tax').textContent='$'+tax.toFixed(2);document.getElementById('s-tot').textContent='$'+(sub+fee+tax).toFixed(2);
+ document.getElementById('s-diff').textContent=tot?('$'+((sub+fee+tax)-tot).toFixed(2)+(Math.abs(sub+fee+tax-tot)<=1?' ✔ 差不多':' ⚠ 差得多，请核对')):'-';}
+function addRow(){let t=document.getElementById('rowtpl').content.cloneNode(true);document.getElementById('items').appendChild(t);
+ let items=document.querySelectorAll('#items .item');let last=items[items.length-1];last.querySelector('[name=delete_item]').value=items.length-1;
+ last.querySelectorAll('input').forEach(e=>e.addEventListener('input',recalc));recalc();}
+document.querySelectorAll('input').forEach(e=>e.addEventListener('input',recalc));recalc();
+</script>
+{% endblock %}

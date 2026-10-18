@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block body %}
+<h1>我的提醒</h1>
+<form method="post" action="/alerts/check"><button class="confirm-btn" type="submit">🔔 检查最新打折提醒</button></form>
+{% for a in rows %}<div class="record">【{{ {'wishlist_deal':'待购打折','price_adjust_30d':'30天内价保','restock_over30d':'补货提醒'}[a.alert_type] }}】{{ a.message }}<br><span class="hint">{{ a.triggered_at }}</span></div>
+{% else %}<p class="big">暂时没有提醒。待购或买过的商品打折时，这里会出现。</p>{% endfor %}
+{% endblock %}
