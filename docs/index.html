@@ -76,10 +76,11 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
     <tr><th>商品件数</th><td><input class="field" id="countInput" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 5"></td></tr>
   </table>
   <h2 style="font-size:24px">商品列表</h2>
-  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。长小票分几张拍时，如果接缝处同一件商品重复出现（代码和价格完全一样、会标黄提醒），点那一行右边的「🗑 删除这行」删掉重复行，再看件数核对是否对上。</p>
+  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。长小票分几张拍时，接缝处重复拍到的同一段，程序会自动认出并去掉，不用您手工删；下面会有一句提示告诉您自动去掉了几行。删除按钮只留给认错时改错用。</p>
   <table><thead><tr><th>代码</th><th>名称</th><th>价格 $</th><th>删除</th></tr></thead><tbody id="items"></tbody></table>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
+  <div id="dedupBox"></div>
   <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
   <div class="big" style="margin-top:18px">第 4 步：核对无误才入库</div>
   <p class="small">没点下面这个按钮，就不会保存。这版先存在您手机浏览器本地（IndexedDB），照片和数据不上传服务器；后续正式 App 再对接云端。</p>
@@ -137,37 +138,10 @@ $('fileCamera').addEventListener('change',e=>{ addFiles(e.target.files); e.targe
 $('fileAlbum').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; });
 
 function mergeParsedReceipts(parts){
-  // 长小票拆成几张拍：商品按照片顺序拼接；头部字段取第一张有值的；总计/小计/日期同样取识别到的值。
-  // 底部件数：取最后一张识别到的 expected（长小票的底部通常在最后一张），没有则取任意有值的。
-  const items=[];
-  let store='',storeConf=0.3,date='',dateConf=0.3,total=null,totalConf=0.3,subtotal=null,expected=null;
-  for(let i=0;i<parts.length;i++){
-    const r=parts[i]||{};
-    if(!store && r.store_code){ store=r.store_code; storeConf=r.store_confidence??0.5; }
-    if(!date && r.purchase_date){ date=r.purchase_date; dateConf=r.date_confidence??0.5; }
-    if(total===null && r.total!==null && r.total!==undefined){ total=r.total; totalConf=r.total_confidence??0.5; }
-    if(subtotal===null && r.subtotal!==null && r.subtotal!==undefined){ subtotal=r.subtotal; }
-    if(r.expected_item_count!==null && r.expected_item_count!==undefined) expected=r.expected_item_count;
-    for(const it of (r.items||[])){
-      const isDiscRow=it.is_discount && typeof it.price==='number' && it.price<0;
-      // 第二张开头若是折扣行，挂到合并后上一件商品（跨照片接缝）
-      if(isDiscRow && items.length && !items[items.length-1].is_discount){
-        const prev=items[items.length-1];
-        if(prev.discount===''||prev.discount===undefined||prev.discount===null){ prev.discount=it.price; prev.discount_code=it.item_code; prev.discount_for=it.discount_for||prev.item_code; }
-        else prev.discount=Math.round((parseFloat(prev.discount)+it.price)*100)/100;
-        continue;
-      }
-      items.push({...it});
-    }
-  }
-  const productCount=items.filter(it=>!it.is_discount).length;
-  let itemsSum=0; for(const it of items){ if(typeof it.price==='number') itemsSum+=it.price; if(it.discount!==''&&typeof it.discount==='number') itemsSum+=it.discount; }
-  itemsSum=Math.round(itemsSum*100)/100;
-  const amountDiff=(subtotal!==null&&subtotal!==undefined)?Math.round((subtotal-itemsSum)*100)/100:null;
-  return {items_sum:itemsSum,amount_diff:amountDiff,amount_mismatch:(amountDiff!==null&&Math.abs(amountDiff)>0.05),
-    store_code:store,store_confidence:storeConf,purchase_date:date,date_confidence:dateConf,
-    total:total,total_confidence:totalConf,subtotal:subtotal,items:items,
-    expected_item_count:expected,product_count:productCount,count_mismatch:expected!==null&&productCount!==expected};
+  // 自动接缝去重在 parser.js 的 dedupeMergeParts：前图末尾与后图开头连续重合才删，
+  // 并用小票件数+小计金额闭环选重叠长度；单行/不在接缝的同款重复（如买两件BOUNTY）不自动删。
+  if(typeof dedupeMergeParts==='function') return dedupeMergeParts(parts);
+  return {items:[],items_sum:0,amount_diff:null,amount_mismatch:false,store_code:'',purchase_date:'',total:null,subtotal:null,expected_item_count:null,product_count:0,count_mismatch:false,auto_removed_items:[],auto_removed_count:0,parts_count:(parts||[]).length};
 }
 
 function formatDateDigits(v){
@@ -351,7 +325,6 @@ function render(r,raw){
   for(const it of r.items){
     const tr=document.createElement('tr'); tr.className='itemrow';
     const numBad=(it.price===''||!/^\d{3,}$/.test(String(it.item_code)));
-    const isDupAdjacent=!!(_prevItem && String(_prevItem.item_code||'')===String(it.item_code||'') && it.item_code!=='' && typeof it.price==='number' && typeof _prevItem.price==='number' && Number(it.price)===Number(_prevItem.price));
     tr.innerHTML='<td><input class="field f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td><button type="button" class="rowdelbtn" aria-label="删除这行">🗑 删除这行</button></td>';
     const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
     codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
@@ -360,7 +333,6 @@ function render(r,raw){
     const note=tr.querySelector('.noteTxt');
     if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
     else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
-    if(isDupAdjacent){ codeEl.classList.add('warn'); priceEl.classList.add('warn'); const dn=document.createElement('div'); dn.className='dupnote'; dn.textContent='⚠ 和上一行代码、价格完全一样，可能是长小票分张拍时接缝处重复了。请核对：不需要这一行就点右边「🗑 删除这行」。'; nameEl.parentElement.appendChild(dn); }
     tr.querySelector('.rowdelbtn').addEventListener('click',()=>{
       const next=tr.nextElementSibling;
       if(next && next.querySelector && next.querySelector('.f-discount')) next.remove();
@@ -380,14 +352,26 @@ function render(r,raw){
   }
   // fix discount collection: move discount inputs are inside previous tr hidden; instead link by order handled in collect via DOM order below
   if(r.expected_item_count!==null&&r.expected_item_count!==undefined){
-    $('count').textContent=r.count_mismatch?(`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，对不上 ⚠ 请重点核对`):(`件数核对：抓到 ${r.product_count} 件，和小票底部 ${r.expected_item_count} 件对上了 ✓`);
-    $('count').className=r.count_mismatch?'big warn':'big';
+    if(!r.count_mismatch){ $('count').textContent=`件数核对：抓到 ${r.product_count} 件，和小票底部 ${r.expected_item_count} 件对上了 ✓`; $('count').className='big'; }
+    else if(r.product_count<r.expected_item_count){ $('count').textContent=`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，还差 ${r.expected_item_count-r.product_count} 件，可能是中间有一段没拍到，请补拍中间那段（不用删任何行）`; $('count').className='big warn'; }
+    else { $('count').textContent=`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，多了 ${r.product_count-r.expected_item_count} 件 ⚠ 可能是认多了或价格行被当成商品，请重点核对`; $('count').className='big warn'; }
   } else $('count').textContent=`件数核对：抓到 ${r.product_count} 件商品（小票底部件数没认出来，没法自动核对）`;
-  if(r.subtotal!==null&&r.subtotal!==undefined&&r.items_sum!==undefined){
-    const d=r.amount_diff;
-    $('amount').textContent='金额核对：商品合计 '+Number(r.items_sum).toFixed(2)+'，小票小计 '+Number(r.subtotal).toFixed(2)+'，差 '+(d===null?'—':Number(d).toFixed(2))+(Math.abs(d)<=0.25?'（差额小，可能是环保费/押金）':(Math.abs(d)>1?' ⚠ 差别较大，请重点核对价格有没有漏一位':''));
-    if(Math.abs(d)>1) $('amount').className='small warn'; else $('amount').className='small';
-  } else $('amount').textContent='';
+  const ac=r.amount_check||((typeof amountCheck==='function'&&r.items_sum!==undefined)?amountCheck(r.items_sum,r.subtotal,r.total):null);
+  if(ac&&ac.target!==null&&ac.target!==undefined){
+    const vsTotal=(r.total!==null&&r.total!==undefined&&Number(r.total)!==Number(ac.target))?('；程序加总 $'+Number(r.items_sum).toFixed(2)+' vs 小票总计 TOTAL $'+Number(r.total).toFixed(2)+'，差 $'+Math.abs(Number(r.total)-Number(r.items_sum)).toFixed(2)+'（总计含税，和小计比更准）'):'';
+    $('amount').textContent='金额核对：程序加总 $'+Number(r.items_sum).toFixed(2)+' vs '+(ac.target_label||'小票金额')+' $'+Number(ac.target).toFixed(2)+'，差 $'+Number(ac.abs_diff).toFixed(2)+'。'+ac.message+vsTotal;
+    $('amount').className=(ac.level==='warn_large')?'big warn':'small';
+  } else $('amount').textContent='金额核对：小票小计/总计没认出来，没法自动核对金额，请核对总计那一栏。';
+  // 自动去重汇总：只给一句人话 + 折叠详情，不逐行让用户删
+  const db=$('dedupBox');
+  if(db){
+    if(r.auto_removed_count>0){
+      const rows=(r.auto_removed_items||[]).map(it=>esc(it.item_code||'')+' '+esc(it.item_name||'')+' $'+(typeof it.price==='number'?Number(it.price).toFixed(2):'—')).join('<br>');
+      db.innerHTML='<p class="big" style="color:#0a7a42">已自动去掉分张接缝重复的 '+r.auto_removed_count+' 行 ✓ 不用您手工删。</p><details><summary class="small">点开看自动去掉的是哪几行（核对用）</summary><div class="small">'+rows+'</div></details>';
+    } else if((r.parts_count||1)>1){
+      db.innerHTML='<p class="small">多张合并：没有发现接缝重复段，已按原样合并（同一件买两件的不会被自动删）。</p>';
+    } else db.innerHTML='';
+  }
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
 }
@@ -396,7 +380,7 @@ function refreshCountAfterRowEdit(){
   const ci=$('countInput'); if(ci) ci.value=n;
   if(_expectedCount!==null && _expectedCount!==undefined){
     const mismatch=n!==_expectedCount;
-    $('count').textContent=mismatch?(`件数核对：现在有 ${n} 件，小票底部写 ${_expectedCount} 件，对不上 ⚠ 请重点核对（有重复行就删掉重复行）`):(`件数核对：现在 ${n} 件，和小票底部 ${_expectedCount} 件对上了 ✓`);
+    $('count').textContent=mismatch?((n<_expectedCount?`件数核对：现在有 ${n} 件，小票底部写 ${_expectedCount} 件，还差 ${_expectedCount-n} 件，可能是中间有一段没拍到，请补拍中间那段`:`件数核对：现在有 ${n} 件，小票底部写 ${_expectedCount} 件，多了 ${n-_expectedCount} 件 ⚠ 请重点核对是不是认多了`)):(`件数核对：现在 ${n} 件，和小票底部 ${_expectedCount} 件对上了 ✓`);
     $('count').className=mismatch?'big warn':'big';
   } else {
     $('count').textContent=`件数核对：现在有 ${n} 件商品（小票底部件数没认出来，没法自动核对）`;

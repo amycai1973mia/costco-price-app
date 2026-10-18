@@ -39,7 +39,7 @@ function fuzzyCorrectName(raw){
   let cleaned=String(raw||'').toUpperCase().replace(/[\*\%\#@]+/g,' ').replace(/[^A-Z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
   if(!cleaned) return {name:cleaned,corrected:false,similarity:0,from:raw};
   let best='',bestSim=0;
-  for(const k of KNOWN_PRODUCTS){ const s=Math.max(_sim(cleaned,k), cleaned.length>3?_sim(cleaned.slice(1),k):0); if(s>bestSim){bestSim=s;best=k;} // 残缺前缀: CHICKEN ST -> CHICKEN STRP
+  for(const k of KNOWN_PRODUCTS){ const s=Math.max(_sim(cleaned,k), cleaned.length>3?_sim(cleaned.slice(1),k):0, _sim(cleaned.replace(/ /g,''),k.replace(/ /g,''))); if(s>bestSim){bestSim=s;best=k;} // 残缺前缀: CHICKEN ST -> CHICKEN STRP
     if((k.startsWith(cleaned)||cleaned.startsWith(k)) && Math.abs(k.length-cleaned.length)<=4) { if(0.86>bestSim){best=k;bestSim=0.86;} } }
   if(best && bestSim>=0.72 && cleaned!==best) return {name:best,corrected:true,similarity:Math.round(bestSim*100)/100,from:cleaned};
   return {name:cleaned,corrected:false,similarity:Math.round(bestSim*100)/100,from:cleaned};
@@ -77,6 +77,10 @@ function parseReceipt(inputLines){
     if(lab.startsWith('SUBTOTA')||up.includes('SUBTOTAL')) subtotal=p;
     if((lab==='TOTAL'||/\bTOTAL\b/.test(up))&&!up.includes('NUMBER')&&!up.includes('TAX')){ total=p; totalConf=l.conf??0.5; }
     if(up.includes('AMOUNT')&&total===null){ total=p; totalConf=l.conf??0.5; }
+  }
+  // TOTAL 小数点被 OCR 吃掉 (如 TOTAL 13889): 仅当候选/100 大于小计且不超过小计*1.3 才低置信补回, 不乱猜
+  if(total===null && subtotal!==null){
+    for(const l of lines){ const up=l.text.toUpperCase(); if(!/\bTOTAL\b/.test(up)||up.includes('NUMBER')||up.includes('TAX')) continue; const m=l.text.match(/(\d{4,6})\s*$/); if(m){ const cand=parseInt(m[1])/100; if(cand>subtotal && cand<subtotal*1.3){ total=cand; totalConf=0.5; break; } } }
   }
   // 总计金额在 AMOUNT/MasterCard 等多行重复出现时互相印证, 提高数字置信 (不改值)
   if(total!==null){ let hits=0; for(const l of lines){ if(_price(l.text)===total) hits++; } if(hits>=2) totalConf=Math.max(totalConf,0.9); }
@@ -139,7 +143,7 @@ function parseReceipt(inputLines){
       if(price==='') conf=Math.min(conf,0.4);
     }
     name=name.replace(/^\//,'折扣 ').trim();
-    const isDisc = code.startsWith('000039') || /^(TPD\/|\/|折扣\s)/i.test(name) || /\d\.\d{2}\s*-\s*(GP)?\s*$/.test(t);
+    const isDisc = code.startsWith('000039') || (code.length>=9 && code.startsWith('0000')) || /^(TPD\/|\/|折扣\s)/i.test(name) || /\d\.\d{2}\s*-\s*(GP)?\s*$/.test(t); // 折扣代码是000039xxxx类长码, OCR把9认成5也要认得出
     if(typeof price==='number' && isDisc) price=-Math.abs(price);
     if(typeof price==='number' && /\d\.\d{2}\s*-\s*(GP)?\s*$/.test(t) && price>0) price=-price;
     const [nm0,nameChanged]=cleanName(name.replace(/^[\*\%\#]+/,'').replace(/[\*]+$/,'').trim());
@@ -153,6 +157,7 @@ function parseReceipt(inputLines){
   }
   const merged=[];
   for(const it of items){
+    if(it.is_discount && typeof it.price!=='number') continue; // 折扣行金额没认出: 它不是商品, 不能占一件的数(金额会在金额核对里以差额报警)
     const isDiscRow=it.is_discount&&typeof it.price==='number'&&it.price<0;
     if(isDiscRow&&merged.length&&!merged[merged.length-1].is_discount){
       const prev=merged[merged.length-1];
@@ -169,4 +174,112 @@ function parseReceipt(inputLines){
   const amountMismatch=(amountDiff!==null && Math.abs(amountDiff)>0.05);
   return {items_sum:itemsSum,amount_diff:amountDiff,amount_mismatch:amountMismatch,store_code:store,store_confidence:storeConf,purchase_date:purchaseDate,date_confidence:purchaseDate?dateConf:0.3,total:total,total_confidence:total!==null?totalConf:0.3,subtotal:subtotal,items:merged,expected_item_count:expected,product_count:productCount,count_mismatch:expected!==null&&productCount!==expected};
 }
-if(typeof module!=='undefined'&&module.exports) module.exports={parseReceipt,cleanName};
+if(typeof module!=='undefined'&&module.exports) module.exports={parseReceipt,cleanName,dedupeMergeParts,seamRowMatch,amountCheck,fuzzyCorrectName};
+
+// --- 多张接缝自动去重 + 金额闭环（用户要求：不能让用户手工删接缝重复）---
+// 规则：只有“前图末尾与后图开头连续多行顺序重合”才算接缝重复；买两件同款（如两件BOUNTY）
+// 本来就会同代码同价分开列，若不在接缝连续段里、或删掉后件数/金额反而对不上，就不删。
+function _priceEq(a,b){ return typeof a==='number'&&typeof b==='number'&&Math.abs(a-b)<0.005; }
+function _discEq(a,b){ const da=(a&&a.discount!==''&&a.discount!==undefined&&a.discount!==null)?Number(a.discount):null; const db=(b&&b.discount!==''&&b.discount!==undefined&&b.discount!==null)?Number(b.discount):null; return da===null||db===null||Math.abs(da-db)<0.005; }
+function seamRowMatch(a,b){
+  if(!a||!b) return {match:false,strong:false,similarity:0};
+  if(a.is_discount||b.is_discount) return {match:false,strong:false,similarity:0};
+  if(!_priceEq(a.price,b.price)) return {match:false,strong:false,similarity:0};
+  if(!_discEq(a,b)) return {match:false,strong:false,similarity:0};
+  const ca=String(a.item_code||'').trim(), cb=String(b.item_code||'').trim();
+  const sim=_sim(String(a.item_name||'').toUpperCase(), String(b.item_name||'').toUpperCase());
+  const codeEq=!!ca&&ca===cb;
+  if(codeEq && sim>=0.55) return {match:true,strong:sim>=0.78,similarity:Math.round(sim*100)/100};
+  if(!codeEq && ca && cb && sim>=0.88) return {match:true,strong:sim>=0.93,similarity:Math.round(sim*100)/100}; // 代码认错一位，但名称+价格高度一致
+  if((!ca||!cb) && sim>=0.92) return {match:true,strong:false,similarity:Math.round(sim*100)/100};
+  return {match:false,strong:false,similarity:Math.round(sim*100)/100};
+}
+function _feasibleOverlaps(A,B){
+  const out=[]; const maxK=Math.min(8,A.length,B.length);
+  for(let k=1;k<=maxK;k++){
+    let ok=true, strong=true;
+    for(let j=0;j<k;j++){ const m=seamRowMatch(A[A.length-k+j],B[j]); if(!m.match){ok=false;break;} if(!m.strong) strong=false; }
+    if(ok && (k>=2 || strong)) out.push(k); // 单行重合必须强匹配（代码+价格+名称都像），且最终还要靠件数/金额闭环才会被选
+  }
+  return out;
+}
+function amountCheck(itemsSum, subtotal, total){
+  const target=(subtotal!==null&&subtotal!==undefined)?Number(subtotal):(total!==null&&total!==undefined?Number(total):null);
+  const targetLabel=(subtotal!==null&&subtotal!==undefined)?'小票小计 SUBTOTAL':(target!==null?'小票总计 TOTAL':null);
+  if(target===null) return {target:null,target_label:targetLabel,diff:null,abs_diff:null,level:'none',message:'小票小计/总计没认出来，没法自动核对金额'};
+  const diff=Math.round((target-Number(itemsSum))*100)/100; const ad=Math.abs(diff);
+  const largeThreshold=Math.max(3, Math.round(target*0.03*100)/100);
+  let level,message;
+  if(ad===0){ level='exact'; message='完全对上 ✓ 商品加总和小票印的金额一分不差'; }
+  else if((subtotal===null||subtotal===undefined) && diff>=0 && ad>1.00 && ad<=Math.round(target*0.15*100)/100){ level='tax_likely'; message='这是拿总计 TOTAL 比的，总计含税：差额主要是税 + 环保费/押金（本样本税约 2.88、费用 0.17，合计正好约 3.05），不算异常；能认出小计时以小计核对为准'; }
+  else if(ad<=1.00){ level='ok_small'; message='差额在 1 元以内，应是环保费 ENVIRO FEE / 押金 DEPOSIT 这类没进商品清单的费用（样本出现过 0.07+0.10=0.17），不用紧张'; }
+  else if(ad>largeThreshold){ level='warn_large'; message='差额明显偏大（超过 '+largeThreshold.toFixed(2)+' 元或总额约 3%）：可能是漏了一件、价格认错，或自动去重删多了，请重点核对'; }
+  else { level='mid'; message='差额不算小也不算特别大，请扫一眼价格有没有认错一位'; }
+  return {target:target,target_label:targetLabel,diff:diff,abs_diff:ad,large_threshold:largeThreshold,level:level,message:message};
+}
+function dedupeMergeParts(parts){
+  parts=(parts||[]).filter(Boolean);
+  let store='',storeConf=0.3,date='',dateConf=0.3,total=null,totalConf=0.3,subtotal=null,expected=null;
+  for(const r of parts){
+    if(!store && r.store_code){ store=r.store_code; storeConf=r.store_confidence??0.5; }
+    if(!date && r.purchase_date){ date=r.purchase_date; dateConf=r.date_confidence??0.5; }
+    if(total===null && r.total!==null && r.total!==undefined){ total=r.total; totalConf=r.total_confidence??0.5; }
+    if(subtotal===null && r.subtotal!==null && r.subtotal!==undefined){ subtotal=r.subtotal; }
+    if(r.expected_item_count!==null && r.expected_item_count!==undefined) expected=r.expected_item_count;
+  }
+  const partItems=parts.map(r=>(r.items||[]).map(it=>({...it})));
+  function assemble(ks){
+    const items=[], removed=[], seams=[];
+    for(let i=0;i<partItems.length;i++){
+      const B=partItems[i];
+      if(i===0){ for(const it of B) items.push({...it}); continue; }
+      const k=ks[i-1]||0;
+      for(let j=0;j<k;j++) removed.push({...B[j],_seam_from_part:i+1});
+      if(k) seams.push({part:i+1,overlap:k});
+      for(const it of B.slice(k)){
+        const isDiscRow=it.is_discount && typeof it.price==='number' && it.price<0;
+        if(isDiscRow && items.length && !items[items.length-1].is_discount){
+          const prev=items[items.length-1];
+          if(prev.discount===''||prev.discount===undefined||prev.discount===null){ prev.discount=it.price; prev.discount_code=it.item_code; prev.discount_for=it.discount_for||prev.item_code; }
+          else prev.discount=Math.round((parseFloat(prev.discount)+it.price)*100)/100;
+          continue;
+        }
+        items.push({...it});
+      }
+    }
+    return {items,removed,seams};
+  }
+  function stats(items){
+    const pc=items.filter(it=>!it.is_discount).length;
+    let s=0; for(const it of items){ if(typeof it.price==='number') s+=it.price; if(it.discount!==''&&typeof it.discount==='number') s+=it.discount; }
+    return {pc,sum:Math.round(s*100)/100};
+  }
+  // 枚举每道接缝的重叠长度，用件数+小计金额闭环选最优（不同重叠长度都试）
+  let combos=[[]];
+  for(let i=1;i<partItems.length;i++){
+    const opts=[0,..._feasibleOverlaps(partItems[i-1],partItems[i])];
+    const next=[]; for(const c of combos) for(const k of opts) next.push([...c,k]); combos=next;
+  }
+  const evidence = expected!==null || subtotal!==null;
+  let best=null;
+  for(const ks of combos){
+    const a=assemble(ks); const st=stats(a.items); const overlapTotal=ks.reduce((x,y)=>x+y,0);
+    const cand={ks,...a,...st,overlapTotal,
+      countMismatch:expected!==null?Math.abs(st.pc-expected):null,
+      amountDiff:(subtotal!==null)?Math.round((subtotal-st.sum)*100)/100:null};
+    cand.score = evidence ? ((cand.countMismatch||0)*100 + (cand.amountDiff!==null?Math.abs(cand.amountDiff):0)) : 0;
+    cand.effectiveOverlap = ks.reduce((s,k)=>s+(k>=2?k:0),0);
+    if(!best) best=cand;
+    else if(evidence){ if(cand.score<best.score-0.001 || (Math.abs(cand.score-best.score)<=0.001 && cand.overlapTotal>best.overlapTotal)) best=cand; }
+    else { if(cand.effectiveOverlap>best.effectiveOverlap) best=cand; }
+  }
+  const items=best?best.items:[], removed=best?best.removed:[];
+  const st=stats(items);
+  const ac=amountCheck(st.sum, subtotal, total);
+  return {items_sum:st.sum,amount_diff:(subtotal!==null?Math.round((subtotal-st.sum)*100)/100:ac.diff),amount_mismatch:ac.level==='warn_large'||ac.level==='mid',amount_check:ac,
+    store_code:store,store_confidence:storeConf,purchase_date:date,date_confidence:dateConf,
+    total:total,total_confidence:totalConf,subtotal:subtotal,items:items,
+    expected_item_count:expected,product_count:st.pc,count_mismatch:expected!==null&&st.pc!==expected,
+    auto_removed_items:removed,auto_removed_count:removed.length,seam_overlaps:best?best.seams:[],parts_count:parts.length,
+    missing_count:(expected!==null&&st.pc<expected)?(expected-st.pc):0,extra_count:(expected!==null&&st.pc>expected)?(st.pc-expected):0};
+}
