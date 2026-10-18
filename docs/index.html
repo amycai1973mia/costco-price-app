@@ -29,6 +29,7 @@ input.field.warn{background:#fff3a3;border-color:#b58900}
 .fieldwrap{padding:6px 0}
 label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bottom:4px}
 .savebtn{background:#0a7a42!important;font-size:26px!important}
+.restartbtn{background:#fff!important;color:#b00020!important;border:2px solid #b00020!important;font-size:22px!important;padding:14px}
 .delbtn{background:#b00020;font-size:18px;padding:12px}
 .clearbtn{background:#666;font-size:18px;padding:12px}
 #saveMsg{font-size:24px;font-weight:700;color:#0a7a42;background:#e6f4ea;border-radius:12px;padding:14px;display:none}
@@ -134,6 +135,8 @@ table.fees{width:100%;border-collapse:collapse;table-layout:fixed} table.fees td
   <div class="big" style="margin-top:18px">第 4 步：核对无误才入库</div>
   <p class="small">没点下面这个按钮，就不会保存。这版先存在您手机浏览器本地（IndexedDB），照片和数据不上传服务器；后续正式 App 再对接云端。</p>
   <button id="saveBtn" class="savebtn">确认无误，入库</button>
+  <button type="button" id="restartBtn" class="restartbtn">识别太差，重新再来（放弃这次，重新拍）</button>
+  <p class="small">识别错得太多、不想一条条改时，点上面这个「重新再来」：会先问您一句确认，确认后清掉这次的照片和核对内容，回到最开始重新拍。<b>已入库的记录不会动。</b></p>
   <div id="saveMsg" role="status"></div>
   <div id="donePanel">
     <div class="big" id="doneText">已入库 ✓</div>
@@ -580,6 +583,12 @@ function resetToHome(){
   renderThumbs(); renderRecords(); window.scrollTo({top:0,behavior:'smooth'});
 }
 $('backHome').addEventListener('click',resetToHome);
+$('restartBtn').addEventListener('click',()=>{
+  if(_ocrRunning) return;
+  const ok=confirm('这次识别不要了，重新再来？\n\n会清掉这次的照片和核对内容（已经改过的也会清掉），回到最开始重新拍。\n已入库的记录不会动。');
+  if(!ok) return; // 误点/取消：什么都不清，改过的数据还在
+  resetToHome();
+});
 $('saveBtn').addEventListener('click',async()=>{
   const rec=collectReceipt();
   if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再入库。'; return; }
