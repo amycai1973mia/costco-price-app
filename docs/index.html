@@ -39,7 +39,25 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
 .thumb img{width:100%;height:110px;object-fit:cover;border-radius:8px}
 .thumb .tname{font-size:15px;color:#333;word-break:break-all;margin:6px 0}
 .thumbdel{background:#b00020;font-size:17px;padding:10px;margin:6px 0}
-.rowdelbtn{background:#b00020;font-size:16px;padding:10px 8px;margin:0;white-space:nowrap}
+.rowdelbtn{background:transparent;color:#b00020;font-size:26px;line-height:1;padding:4px 0;margin:0;width:34px;height:38px;display:inline-block;border-radius:8px}
+.rowdelbtn:active{background:#ffe3e3}
+/* 核对页清爽一行版：一件商品一行，代码|名称|金额同行全显 */
+table.items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:19px}
+table.items th,table.items td{border-bottom:1px solid #ddd;padding:5px 3px;text-align:left;vertical-align:middle;overflow:hidden}
+table.items th{font-size:17px;color:#333;padding:6px 3px}
+input.field.itemfield{font-size:19px;padding:8px 6px;min-height:44px;border-width:1.5px;border-radius:8px}
+input.field.f-discount{font-size:17px;padding:5px 6px;min-height:36px;border-width:1.5px;border-radius:8px;color:#b00020;font-weight:700;width:100%}
+tr.discrow td{padding:2px 3px 6px;border-bottom:1px solid #eee;background:#fff}
+.disc-label{color:#b00020;font-size:16px;font-weight:700;white-space:nowrap}
+.noteTxt{font-size:14px;line-height:1.3}
+#undoBox{display:none;margin:8px 0}
+#undoDel{width:auto;display:inline-block;font-size:17px;padding:9px 14px;margin:0;background:#666}
+@media (max-width:480px){
+  main{padding:10px} .card{padding:12px 10px}
+  table.items{font-size:17px}
+  input.field.itemfield{font-size:17px;padding:7px 4px;min-height:42px}
+  .rowdelbtn{width:28px;font-size:24px}
+}
 .dupnote{font-size:15px;color:#8a6d00;background:#fff3a3;border-radius:8px;padding:6px;margin-top:6px}
 </style>
 </head>
@@ -76,8 +94,9 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
     <tr><th>商品件数</th><td><input class="field" id="countInput" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 5"></td></tr>
   </table>
   <h2 style="font-size:24px">商品列表</h2>
-  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。长小票分几张拍时，接缝处重复拍到的同一段，程序会自动认出并去掉，不用您手工删；下面会有一句提示告诉您自动去掉了几行。删除按钮只留给认错时改错用。</p>
-  <table><thead><tr><th>代码</th><th>名称</th><th>价格 $</th><th>删除</th></tr></thead><tbody id="items"></tbody></table>
+  <p class="small">每件一行：代码、名称、金额都在一行，点一下就能改；代码和价格点一下会弹数字键盘。长小票分几张拍时，接缝处重复拍到的同一段，程序会自动认出并去掉，不用您手工删；下面会有一句提示告诉您自动去掉了几行。每行最右边的小 ✕ 只是您核对时改错用的（例如认多了一行才点它），不是让您去删接缝重复的。</p>
+  <table class="items"><colgroup><col style="width:25%"><col style="width:43%"><col style="width:23%"><col style="width:9%"></colgroup><thead><tr><th>代码</th><th>名称</th><th>金额 $</th><th aria-label="删除"></th></tr></thead><tbody id="items"></tbody></table>
+  <div id="undoBox"><button type="button" id="undoDel">↩ 恢复刚刚删掉的那一行</button></div>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
   <div id="dedupBox"></div>
@@ -325,7 +344,7 @@ function render(r,raw){
   for(const it of r.items){
     const tr=document.createElement('tr'); tr.className='itemrow';
     const numBad=(it.price===''||!/^\d{3,}$/.test(String(it.item_code)));
-    tr.innerHTML='<td><input class="field f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td><button type="button" class="rowdelbtn" aria-label="删除这行">🗑 删除这行</button></td>';
+    tr.innerHTML='<td><input class="field itemfield f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field itemfield f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field itemfield f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td style="text-align:center"><button type="button" class="rowdelbtn" aria-label="删除这行" title="删除这行">✕</button></td>';
     const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
     codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
     if(!/^\d{3,}$/.test(String(it.item_code))) codeEl.classList.add('warn');
@@ -334,23 +353,29 @@ function render(r,raw){
     if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
     else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
     tr.querySelector('.rowdelbtn').addEventListener('click',()=>{
-      const next=tr.nextElementSibling;
-      if(next && next.querySelector && next.querySelector('.f-discount')) next.remove();
-      tr.remove(); refreshCountAfterRowEdit();
+      const discTr=(tr.nextElementSibling && tr.nextElementSibling.querySelector && tr.nextElementSibling.querySelector('.f-discount'))?tr.nextElementSibling:null;
+      const after=discTr?discTr.nextElementSibling:tr.nextElementSibling;
+      _lastDeleted={nodes:discTr?[tr,discTr]:[tr], after:after||null};
+      if(discTr) discTr.remove();
+      tr.remove();
+      const ub=$('undoBox'); if(ub) ub.style.display='block';
+      refreshCountAfterRowEdit();
     });
     _prevItem=it;
     tb.appendChild(tr);
     if(it.discount!==''&&it.discount!==undefined&&it.discount!==null){
       const d=document.createElement('tr'); d.className='itemrow-discount';
       // discount belongs to previous item; store as hidden-ish editable row linked to previous item input via data on previous row
-      d.innerHTML='<td></td><td class="disc">↳ 折扣（属于上面这件商品） $</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td><td></td>';
+      d.className='itemrow-discount discrow';
+      d.innerHTML='<td></td><td class="disc-label">↳ 折扣</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td><td></td>';
       d.querySelector('.f-discount').value=Number(it.discount).toFixed(2);
       // attach discount input to previous item row for collect: move node reference
       tr.dataset.hasDiscount='1';
       tb.appendChild(d);
     }
   }
-  // fix discount collection: move discount inputs are inside previous tr hidden; instead link by order handled in collect via DOM order below
+  document.querySelectorAll('#items input').forEach(el=>el.addEventListener('input',()=>refreshCountAfterRowEdit()));
+  // fix discount collection: discount inputs follow their item row in DOM order, handled in collect below
   if(r.expected_item_count!==null&&r.expected_item_count!==undefined){
     if(!r.count_mismatch){ $('count').textContent=`件数核对：抓到 ${r.product_count} 件，和小票底部 ${r.expected_item_count} 件对上了 ✓`; $('count').className='big'; }
     else if(r.product_count<r.expected_item_count){ $('count').textContent=`件数核对：程序抓到 ${r.product_count} 件，小票底部写 ${r.expected_item_count} 件，还差 ${r.expected_item_count-r.product_count} 件，可能是中间有一段没拍到，请补拍中间那段（不用删任何行）`; $('count').className='big warn'; }
@@ -375,7 +400,21 @@ function render(r,raw){
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
 }
+let _lastDeleted=null;
+function refreshAmountAfterRowEdit(){
+  let sum=0;
+  document.querySelectorAll('#items tr.itemrow').forEach(tr=>{ const v=tr.querySelector('.f-price').value.trim(); if(v!=='') sum+=Number(v)||0; });
+  document.querySelectorAll('#items .f-discount').forEach(el=>{ const v=el.value.trim(); if(v!=='') sum+=Number(v)||0; });
+  sum=Math.round(sum*100)/100;
+  const sub=numVal('subtotal'), tot=numVal('total');
+  if(typeof amountCheck==='function'){
+    const ac=amountCheck(sum,sub,tot);
+    if(ac&&ac.target!==null&&ac.target!==undefined){ $('amount').textContent='金额核对：程序加总 $'+sum.toFixed(2)+' vs '+(ac.target_label||'小票金额')+' $'+Number(ac.target).toFixed(2)+'，差 $'+Number(ac.abs_diff).toFixed(2)+'。'+ac.message; $('amount').className=(ac.level==='warn_large')?'big warn':'small'; return; }
+  }
+  $('amount').textContent='金额核对：程序加总 $'+sum.toFixed(2)+'（小票小计/总计没认出来，没法自动核对金额，请核对总计那一栏）。';
+}
 function refreshCountAfterRowEdit(){
+  refreshAmountAfterRowEdit();
   const n=document.querySelectorAll('#items tr.itemrow').length;
   const ci=$('countInput'); if(ci) ci.value=n;
   if(_expectedCount!==null && _expectedCount!==undefined){
@@ -430,6 +469,13 @@ async function renderRecords(){
   }catch(e){ box.innerHTML='<p class="small warn">读取已入库记录失败：'+esc(e&&e.message?e.message:e)+'</p>'; }
 }
 document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ const sb=$('saveBtn'); if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none'; } } });
+const _ub=$('undoDel'); if(_ub) _ub.addEventListener('click',()=>{
+  if(!_lastDeleted) return;
+  const tb=$('items'); const ref=(_lastDeleted.after&&_lastDeleted.after.parentNode===tb)?_lastDeleted.after:null;
+  for(const nd of _lastDeleted.nodes){ if(ref) tb.insertBefore(nd,ref); else tb.appendChild(nd); }
+  _lastDeleted=null; const ub=$('undoBox'); if(ub) ub.style.display='none';
+  refreshCountAfterRowEdit();
+});
 $('saveBtn').addEventListener('click',async()=>{
   const rec=collectReceipt();
   if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再入库。'; return; }
