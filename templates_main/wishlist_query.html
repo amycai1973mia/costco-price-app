@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block body %}
+<h1>🔍 查询已入库待购产品</h1>
+<form method="get" action="/wishlist/query">
+  <label>按名称或代码查 <input name="q" value="{{ q }}" placeholder="输名称或代码，不输就是全部"></label>
+  <button class="confirm-btn" type="submit">🔍 查询</button>
+</form>
+{% for r in rows %}
+<div class="record">
+  <b>{{ r.item_name or '（无名称）' }}</b>（{{ r.item_code or '无代码' }}）<br>
+  加入时间：{{ r.created_at }} · 来源：{{ {'manual':'手工','history':'从已购记录','photo':'拍照'}[r.source] }}
+  {% if r.note %}<br>备注：{{ r.note }}{% endif %}
+  <form method="post" action="/wishlist/{{ r.id }}/delete" onsubmit="return confirm('确定从待购清单删除这件吗？')"><button type="submit">🗑 删除（不要了）</button></form>
+</div>
+{% else %}<p class="big">还没有查到待购商品。</p>{% endfor %}
+<a class="second-btn" href="/wishlist">← 返回待购清单</a>
+{% endblock %}

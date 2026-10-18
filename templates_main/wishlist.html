@@ -1,14 +1,18 @@
 {% extends "base.html" %}{% block body %}
-<h1>我的待购清单</h1><p class="big">未来想买、等打折再买的东西放这里。它一出现在打折名单上，就会提醒你（不设价格门槛）。</p>
-<h2>手工加入</h2>
-<form method="post" action="/wishlist/add"><input type="hidden" name="source" value="manual">
-<label>商品代码 <input name="item_code" inputmode="numeric"></label><label>商品名称 <input name="item_name" required></label><label>备注 <input name="note"></label>
-<button class="confirm-btn" type="submit">＋ 加入待购清单</button></form>
-<h2>拍照加入（拍商品牌子或小票）</h2>
-<form method="post" action="/wishlist/photo" enctype="multipart/form-data"><label class="upload-btn">📷 拍照 / 选照片识别<input type="file" name="receipt" accept="image/*" onchange="this.form.submit()"></label></form>
+<h1>🛒 待购清单</h1>
+<p class="big">未来想买、等打折再买的东西放这里。它一出现在打折名单上就会提醒你（不设价格门槛）。</p>
+
+<h2>第一行：拍照或从相册选照片识别</h2>
+<form method="post" action="/wishlist/photo" enctype="multipart/form-data">
+  <label class="upload-btn" style="background:#0a7a42">📷 拍照（打开相机，拍商品牌子或小票）<input type="file" name="receipt" accept="image/*" capture="environment" onchange="this.form.submit()"></label>
+  <label class="upload-btn" style="background:#005daa">🖼 从相册选照片（打开相册选一张）<input type="file" name="receipt" accept="image/*" onchange="this.form.submit()"></label>
+</form>
+<p class="hint">拍完识别后，会先到下一个页面让你核对，点「加入待购清单」才算入库。</p>
+
+<h2>第二行：手工录入</h2>
+<a class="second-btn" href="/wishlist/manual">✍️ 手工录入（点进去再填商品代码、名称、价格）</a>
+
+<h2>下面：查已经存好的</h2>
+<a class="second-btn" href="/wishlist/query">🔍 查询已入库待购产品（不要的可以删除）</a>
 <p class="hint">也可以在「历史查询」里点商品旁边的「加入待购」，从买过的记录一键加入。</p>
-<form method="get"><label>查询我的待购 <input name="q" value="{{ q }}" placeholder="输名称或代码"></label><button class="second-btn" type="submit">查询</button></form>
-{% for r in rows %}<div class="record"><b>{{ r.item_name }}</b>（{{ r.item_code or '无代码' }}） 来源：{{ {'manual':'手工','history':'从已购记录','photo':'拍照'}[r.source] }}{% if r.note %} · {{ r.note }}{% endif %}
-<form method="post" action="/wishlist/{{ r.id }}/delete" onsubmit="return confirm('确定从待购清单移除吗？')"><button type="submit">移除</button></form></div>
-{% else %}<p>待购清单还是空的。</p>{% endfor %}
 {% endblock %}

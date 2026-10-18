@@ -263,26 +263,74 @@ def wishlist():
         rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id DESC", (session["user_id"],)).fetchall()
     con.close(); return render_template("wishlist.html", rows=rows, q=q)
 
+def _wishlist_note_with_price_note(form):
+    # wishlist 表无价格/数量列（不设期望价格门槛）：手工填的参考价/数量只拼进备注 note 显示，不另建价格字段。
+    note = (form.get("note", "") or "").strip()
+    price = (form.get("item_price", "") or "").strip(); qty = (form.get("item_quantity", "") or "").strip()
+    parts = []
+    if price: parts.append(f"参考价 ${price}")
+    if qty: parts.append(f"数量 {qty}")
+    if note: parts.append(note)
+    return " · ".join(parts)
+
 @app.route("/wishlist/add", methods=["POST"])
 @login_required
 def wishlist_add():
     code = request.form.get("item_code", "").strip(); name = request.form.get("item_name", "").strip()
-    source = request.form.get("source", "manual"); note = request.form.get("note", "").strip()
+    source = request.form.get("source", "manual"); note = _wishlist_note_with_price_note(request.form)
     src_item = request.form.get("source_receipt_item_id") or None
     if source not in ("manual", "history", "photo"): source = "manual"
-    if not code and not name: flash("请至少填商品名称或代码。"); return redirect(url_for("wishlist"))
+    if not code and not name: flash("请至少填商品名称或代码。"); return redirect(url_for("wishlist_manual" if source=="manual" else "wishlist"))
     con = db()
     try:
         con.execute("INSERT INTO wishlist(user_id,item_code,item_name,note,source,source_receipt_item_id) VALUES(?,?,?,?,?,?)",
                     (session["user_id"], code, name, note, source, src_item)); con.commit(); flash("已加入待购清单 ✓")
     except sqlite3.IntegrityError: flash("这个商品已经在你的待购清单里了。")
-    con.close(); return redirect(url_for("wishlist"))
+    con.close()
+    if source == "history": return redirect(url_for("history"))
+    return redirect(url_for("wishlist_query"))
+
+@app.route("/wishlist/manual")
+@login_required
+def wishlist_manual():
+    return render_template("wishlist_manual.html")
+
+@app.route("/wishlist/query")
+@login_required
+def wishlist_query():
+    q = request.args.get("q", "").strip(); con = db()
+    if q:
+        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 AND (item_name LIKE ? OR item_code LIKE ?) ORDER BY id DESC",
+                           (session["user_id"], f"%{q}%", f"%{q}%")).fetchall()
+    else:
+        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id DESC", (session["user_id"],)).fetchall()
+    con.close(); return render_template("wishlist_query.html", rows=rows, q=q)
+
+@app.route("/wishlist/photo/confirm-add", methods=["POST"])
+@login_required
+def wishlist_photo_confirm_add():
+    codes = request.form.getlist("item_code"); names = request.form.getlist("item_name")
+    prices = request.form.getlist("item_price"); notes = request.form.getlist("item_note")
+    selected = set(request.form.getlist("selected"))
+    con = db(); added = 0; skipped = 0
+    for i in range(max(len(codes), len(names))):
+        if selected and str(i) not in selected: continue
+        code = codes[i].strip() if i < len(codes) else ""; name = names[i].strip() if i < len(names) else ""
+        if not code and not name: continue
+        note = _wishlist_note_with_price_note({"item_price": prices[i] if i < len(prices) else "", "note": notes[i] if i < len(notes) else ""})
+        try:
+            con.execute("INSERT INTO wishlist(user_id,item_code,item_name,note,source) VALUES(?,?,?,?, 'photo')",
+                        (session["user_id"], code, name, note)); added += 1
+        except sqlite3.IntegrityError: skipped += 1
+    con.commit(); con.close()
+    flash(f"已加入待购清单 ✓ 共 {added} 件" + (f"，{skipped} 件已在清单里跳过。" if skipped else ""))
+    return redirect(url_for("wishlist_query"))
 
 @app.route("/wishlist/<int:wid>/delete", methods=["POST"])
 @login_required
 def wishlist_delete(wid):
     con = db(); con.execute("UPDATE wishlist SET is_active=0 WHERE id=? AND user_id=?", (wid, session["user_id"])); con.commit(); con.close()
-    flash("已从待购清单移除。"); return redirect(url_for("wishlist"))
+    flash("已从待购清单移除。"); return redirect(url_for("wishlist_query"))
 
 @app.route("/wishlist/photo", methods=["POST"])
 @login_required

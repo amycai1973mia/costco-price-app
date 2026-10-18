@@ -59,7 +59,10 @@ try:
     # 待购: 手工 + 从历史加入
     c.post("/wishlist/add", data={"item_code": "9990001", "item_name": "TEST待购商品", "source": "manual"})
     c.post("/wishlist/add", data={"item_code": "1412124", "item_name": "QUICK OATS", "source": "history"})
-    assert "TEST待购商品" in c.get("/wishlist").get_data(as_text=True)
+    entry = c.get("/wishlist").get_data(as_text=True)
+    assert "手工录入" in entry and "查询已入库待购产品" in entry and 'name="item_code"' not in entry, "待购入口页不应铺表单"
+    assert "TEST待购商品" in c.get("/wishlist/query").get_data(as_text=True)
+    assert "TEST待购商品" in c.get("/wishlist/query?q=TEST").get_data(as_text=True)
     # 管理员导入示例打折数据 -> 自动生成三类提醒
     sample = (BASE / "sample_data" / "sample_deals.csv").read_text(encoding="utf-8")
     r = admin_c.post("/admin/deals/import", data={"deals_text": sample}, follow_redirects=True)
