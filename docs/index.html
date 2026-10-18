@@ -33,6 +33,14 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
 .clearbtn{background:#666;font-size:18px;padding:12px}
 #saveMsg{font-size:24px;font-weight:700;color:#0a7a42;background:#e6f4ea;border-radius:12px;padding:14px;display:none}
 .rec{border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;background:#fff}
+.cambtn{background:#0a7a42!important}
+.thumbs{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+.thumb{width:150px;border:2px solid #ccc;border-radius:12px;padding:8px;background:#fafafa;text-align:center}
+.thumb img{width:100%;height:110px;object-fit:cover;border-radius:8px}
+.thumb .tname{font-size:15px;color:#333;word-break:break-all;margin:6px 0}
+.thumbdel{background:#b00020;font-size:17px;padding:10px;margin:6px 0}
+.rowdelbtn{background:#b00020;font-size:16px;padding:10px 8px;margin:0;white-space:nowrap}
+.dupnote{font-size:15px;color:#8a6d00;background:#fff3a3;border-radius:8px;padding:6px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -41,14 +49,18 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
 <p class="notice">✅ 照片只在您的手机本地识别，<b>不会上传服务器</b>，也不烧 AI 额度。<br>手机上识别可能要等几十秒，请耐心等一下。</p>
 
 <div class="card">
-  <div class="big">第 1 步：拍 / 选一张小票</div>
-  <label class="filebtn" for="file">📷 拍照或选择小票照片</label>
-  <input id="file" type="file" accept="image/*">
-  <img id="preview" class="preview" alt="">
+  <div class="big">第 1 步：拍照或从相册选小票（可以选多张）</div>
+  <p class="small">小票比较长、一次拍不下时，可以分成 2～3 张拍：先拍上半段，再拍下半段。全部选好后，再点第 2 步的大按钮一起识别、一起核对。</p>
+  <label class="filebtn cambtn" for="fileCamera">📷 拍照（打开相机，现场拍一张）</label>
+  <input id="fileCamera" type="file" accept="image/*" capture="environment">
+  <label class="filebtn" for="fileAlbum">🖼 从相册选（打开相册，可以一次勾选多张）</label>
+  <input id="fileAlbum" type="file" accept="image/*" multiple>
+  <p class="small">两个入口分开：点绿色「📷 拍照」会打开相机，拍一张就加一张，可以连续拍；点蓝色「🖼 从相册选」打开相册，可以一次勾多张。选错了，在下面缩略图里点「删除这张」即可。</p>
+  <div id="thumbs" class="thumbs" aria-label="已选照片列表"></div>
   <div id="fname" class="small"></div>
-  <div class="big" style="margin-top:16px">第 2 步：开始识别</div>
-  <button id="start" disabled>开始识别</button>
-  <div id="status" class="big">请先选择一张小票照片</div>
+  <div class="big" style="margin-top:16px">第 2 步：全部选好后一起识别</div>
+  <button id="start" disabled>全部选好了，开始识别</button>
+  <div id="status" class="big">还没有选照片：请先点「📷 拍照」或「🖼 从相册选」</div>
   <div class="progress"><i id="bar"></i></div>
   <p class="small">提示：拍的时候让小票尽量占满画面、拍正一点、光线亮一点，识别会更准。正在识别时请不要关掉页面。</p>
 </div>
@@ -58,14 +70,14 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
   <p class="small">点日期、代码、价格这些数字框，会自动弹出数字键盘。带 ⚠ 的地方请重点核对。</p>
   <table>
     <tr><th>门店代码</th><td><input class="field" id="store" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 255"></td></tr>
-    <tr><th>购买日期</th><td><input class="field" id="date" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 2026-10-03"><div class="small">日期格式：年-月-日，如 2026-10-03</div></td></tr>
+    <tr><th>购买日期</th><td><input class="field" id="date" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 2026/10/03"><div class="small">只打数字就行，不用打斜杠：打 20261003，会自动变成 2026/10/03。打错了按退格删掉重打。</div><div id="dateHint" class="small warn" style="display:none"></div></td></tr>
     <tr><th>小计 $</th><td><input class="field" id="subtotal" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 90.91"></td></tr>
     <tr><th>总计 $</th><td><input class="field" id="total" inputmode="decimal" type="text" autocomplete="off" placeholder="例如 93.79"></td></tr>
     <tr><th>商品件数</th><td><input class="field" id="countInput" inputmode="numeric" type="text" autocomplete="off" placeholder="例如 5"></td></tr>
   </table>
   <h2 style="font-size:24px">商品列表</h2>
-  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。</p>
-  <table><thead><tr><th>代码</th><th>名称</th><th>价格 $</th></tr></thead><tbody id="items"></tbody></table>
+  <p class="small">商品名称点一下可改字；代码和价格点一下会弹数字键盘。长小票分几张拍时，如果接缝处同一件商品重复出现（代码和价格完全一样、会标黄提醒），点那一行右边的「🗑 删除这行」删掉重复行，再看件数核对是否对上。</p>
+  <table><thead><tr><th>代码</th><th>名称</th><th>价格 $</th><th>删除</th></tr></thead><tbody id="items"></tbody></table>
   <p id="count" class="big"></p>
   <p id="amount" class="small"></p>
   <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
@@ -86,55 +98,182 @@ label.flabel{font-size:17px;color:#333;font-weight:700;display:block;margin-bott
 <p class="small">网页试用版：浏览器本地 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和电脑本地版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
 </main>
 <script>
-let file=null;
+let selectedFiles=[]; // [{file,url}] 按用户选入顺序识别、合并
+let _ocrRunning=false;
 const $=id=>document.getElementById(id);
-$('file').addEventListener('change',e=>{
-  file=e.target.files[0]||null;
-  $('start').disabled=!file;
-  $('fname').textContent=file?('已选：'+file.name):'';
-  if(file) $('preview').src=URL.createObjectURL(file);
-  $('status').textContent=file?'已选好照片，点「开始识别」':'请先选择一张小票照片';
-});
+function updateSelectionUI(){
+  const n=selectedFiles.length;
+  $('start').disabled=_ocrRunning||!n;
+  $('start').textContent=n?`全部选好了，开始识别（共 ${n} 张）`:'全部选好了，开始识别';
+  $('fname').textContent=n?`已选 ${n} 张照片，顺序就是下面从左到右的顺序。全部选好后，点第 2 步大按钮一起识别。`:'还没有选照片。';
+  if(!_ocrRunning && n) $('status').textContent=`已选 ${n} 张，点「全部选好了，开始识别」`;
+  if(!_ocrRunning && !n) $('status').textContent='还没有选照片：请先点「📷 拍照」或「🖼 从相册选」';
+}
+function renderThumbs(){
+  const box=$('thumbs'); box.innerHTML='';
+  selectedFiles.forEach((entry,idx)=>{
+    const div=document.createElement('div'); div.className='thumb';
+    div.innerHTML=`<img alt="已选第${idx+1}张小票照片"><div class="tname">第 ${idx+1} 张<br></div><button type="button" class="thumbdel">删除这张</button>`;
+    div.querySelector('img').src=entry.url;
+    div.querySelector('.tname').append(document.createTextNode(entry.file.name||'照片'));
+    div.querySelector('.thumbdel').addEventListener('click',()=>{
+      const removed=selectedFiles.splice(idx,1)[0];
+      if(removed) URL.revokeObjectURL(removed.url);
+      renderThumbs(); updateSelectionUI();
+    });
+    box.appendChild(div);
+  });
+  updateSelectionUI();
+}
+function addFiles(fileList){
+  const files=[...(fileList||[])];
+  for(const f of files){
+    if(!f) continue;
+    selectedFiles.push({file:f,url:URL.createObjectURL(f)});
+  }
+  renderThumbs();
+}
+$('fileCamera').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; });
+$('fileAlbum').addEventListener('change',e=>{ addFiles(e.target.files); e.target.value=''; });
+
+function mergeParsedReceipts(parts){
+  // 长小票拆成几张拍：商品按照片顺序拼接；头部字段取第一张有值的；总计/小计/日期同样取识别到的值。
+  // 底部件数：取最后一张识别到的 expected（长小票的底部通常在最后一张），没有则取任意有值的。
+  const items=[];
+  let store='',storeConf=0.3,date='',dateConf=0.3,total=null,totalConf=0.3,subtotal=null,expected=null;
+  for(let i=0;i<parts.length;i++){
+    const r=parts[i]||{};
+    if(!store && r.store_code){ store=r.store_code; storeConf=r.store_confidence??0.5; }
+    if(!date && r.purchase_date){ date=r.purchase_date; dateConf=r.date_confidence??0.5; }
+    if(total===null && r.total!==null && r.total!==undefined){ total=r.total; totalConf=r.total_confidence??0.5; }
+    if(subtotal===null && r.subtotal!==null && r.subtotal!==undefined){ subtotal=r.subtotal; }
+    if(r.expected_item_count!==null && r.expected_item_count!==undefined) expected=r.expected_item_count;
+    for(const it of (r.items||[])){
+      const isDiscRow=it.is_discount && typeof it.price==='number' && it.price<0;
+      // 第二张开头若是折扣行，挂到合并后上一件商品（跨照片接缝）
+      if(isDiscRow && items.length && !items[items.length-1].is_discount){
+        const prev=items[items.length-1];
+        if(prev.discount===''||prev.discount===undefined||prev.discount===null){ prev.discount=it.price; prev.discount_code=it.item_code; prev.discount_for=it.discount_for||prev.item_code; }
+        else prev.discount=Math.round((parseFloat(prev.discount)+it.price)*100)/100;
+        continue;
+      }
+      items.push({...it});
+    }
+  }
+  const productCount=items.filter(it=>!it.is_discount).length;
+  let itemsSum=0; for(const it of items){ if(typeof it.price==='number') itemsSum+=it.price; if(it.discount!==''&&typeof it.discount==='number') itemsSum+=it.discount; }
+  itemsSum=Math.round(itemsSum*100)/100;
+  const amountDiff=(subtotal!==null&&subtotal!==undefined)?Math.round((subtotal-itemsSum)*100)/100:null;
+  return {items_sum:itemsSum,amount_diff:amountDiff,amount_mismatch:(amountDiff!==null&&Math.abs(amountDiff)>0.05),
+    store_code:store,store_confidence:storeConf,purchase_date:date,date_confidence:dateConf,
+    total:total,total_confidence:totalConf,subtotal:subtotal,items:items,
+    expected_item_count:expected,product_count:productCount,count_mismatch:expected!==null&&productCount!==expected};
+}
+
+function formatDateDigits(v){
+  const d=String(v||'').replace(/\D/g,'').slice(0,8);
+  if(d.length<=4) return d;
+  if(d.length<=6) return d.slice(0,4)+'/'+d.slice(4);
+  return d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8);
+}
+function validateDateField(keepRecognitionWarn){
+  const el=$('date'); if(!el) return true;
+  const hint=$('dateHint'); const v=el.value.trim(); const d=v.replace(/\D/g,'');
+  let msg='', bad=false;
+  if(d.length===8){
+    const mo=parseInt(d.slice(4,6),10), day=parseInt(d.slice(6,8),10);
+    if(!(mo>=1&&mo<=12)){ bad=true; msg='⚠ 月份不对：月份应该是 1～12，请核对改一下。'; }
+    else if(!(day>=1&&day<=31)){ bad=true; msg='⚠ 日期不对：日子应该是 1～31，请核对改一下。'; }
+  } else if(d.length>0){
+    // 还没打完不算错、不卡住；只在月份已打完且明显超范围时提醒
+    if(d.length>=6){ const mo=parseInt(d.slice(4,6),10); if(!(mo>=1&&mo<=12)){ bad=true; msg='⚠ 月份不对：月份应该是 1～12，请核对改一下。'; } }
+    if(!bad && d.length>=4 && d.length<8){ msg='日期还没打完：请继续把月份和日子打完（共 8 位数字）。'; }
+  }
+  if(hint){ hint.style.display=msg?'block':'none'; hint.textContent=msg; }
+  if(bad) el.classList.add('warn');
+  else if(!keepRecognitionWarn) el.classList.remove('warn');
+  else if(d.length===8 && !bad) { /* 识别置信低时 render 已加 warn，保留给用户核对，不因格式对就静默去掉 */ }
+  return !bad;
+}
+// 日期只打数字、自动带斜杠：在 render 之后绑定（元素已存在）
+document.addEventListener('DOMContentLoaded',()=>{});
+setTimeout(()=>{
+  const el=$('date'); if(!el||el.dataset.maskBound) return; el.dataset.maskBound='1';
+  el.addEventListener('input',()=>{
+    const formatted=formatDateDigits(el.value);
+    if(el.value!==formatted) el.value=formatted;
+    validateDateField(false);
+  });
+  el.addEventListener('blur',()=>validateDateField(false));
+},0);
+
 function warnCell(v,conf,emptyText){
   const bad=(v===''||v===null||v===undefined||(conf!==undefined&&conf<0.85));
   const txt=(v===''||v===null||v===undefined)?(emptyText||'没认出来'):String(v);
   return {txt: bad? (txt+' ⚠ 请核对') : txt, bad};
 }
 $('start').addEventListener('click',async()=>{
-  if(!file) return;
-  $('start').disabled=true; $('result').style.display='none';
-  $('status').textContent='正在处理照片：自动找小票、拉正、放大…'; $('bar').style.width='5%';
+  if(!selectedFiles.length||_ocrRunning) return;
+  _ocrRunning=true; $('start').disabled=true; $('result').style.display='none';
+  $('bar').style.width='2%';
+  let worker=null;
   try{
-    const prep=await preprocessReceipt(file);
-    $('status').textContent='正在识别，请稍等…（手机上可能要几十秒）已'+prep.method;
-    const worker=await Tesseract.createWorker('eng',1,{
-      logger:m=>{ if(m.status){ $('status').textContent='正在识别，请稍等… '+(m.status); } if(typeof m.progress==='number'){ $('bar').style.width=Math.round(10+m.progress*80)+'%'; } }
+    worker=await Tesseract.createWorker('eng',1,{
+      logger:m=>{
+        if(typeof m.progress==='number' && _currentOcrTotal){
+          const overall=((_currentOcrIndex)+m.progress)/_currentOcrTotal;
+          $('bar').style.width=Math.round(5+overall*90)+'%';
+          $('status').textContent=`正在识别第 ${_currentOcrIndex+1}/${_currentOcrTotal} 张… ${(m.status||'识别中')}`;
+        }
+      }
     });
     async function ocr(canvas){
       const {data}=await worker.recognize(canvas);
       const lines=(data.text||'').split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>({text:s,conf:(data.confidence?data.confidence/100:0.5)}));
       return {r:parseReceipt(lines), text:data.text||''};
     }
-    let best=await ocr(prep.grayCanvas);
-    const needSecond = best.r.count_mismatch || best.r.total===null || (best.r.amount_mismatch&&Math.abs(best.r.amount_diff)>1) || best.r.product_count<3;
-    if(needSecond){
-      $('status').textContent='第一遍还没对齐，正在自动换一种方式再认一次…';
-      const second=await ocr(prep.otsuCanvas);
-      if(scoreParsed(second.r)>scoreParsed(best.r)) best=second;
+    const parts=[], rawParts=[], preps=[];
+    _currentOcrTotal=selectedFiles.length;
+    for(let i=0;i<selectedFiles.length;i++){
+      _currentOcrIndex=i;
+      const entry=selectedFiles[i];
+      $('status').textContent=`正在识别第 ${i+1}/${selectedFiles.length} 张…（先找小票、拉正）`;
+      $('bar').style.width=Math.round(5+(i/selectedFiles.length)*90)+'%';
+      const prep=await preprocessReceipt(entry.file);
+      preps.push(prep);
+      $('status').textContent=`正在识别第 ${i+1}/${selectedFiles.length} 张…`;
+      let best=await ocr(prep.grayCanvas);
+      const needSecond = best.r.count_mismatch || best.r.total===null || (best.r.amount_mismatch&&Math.abs(best.r.amount_diff)>1) || best.r.product_count<3;
+      if(needSecond){
+        $('status').textContent=`第 ${i+1}/${selectedFiles.length} 张第一遍还没对齐，正在自动换一种方式再认一次…`;
+        const second=await ocr(prep.otsuCanvas);
+        if(scoreParsed(second.r)>scoreParsed(best.r)) best=second;
+      }
+      best=await tryPaddleFallback(prep,best,false);
+      parts.push(best.r); rawParts.push(`【第 ${i+1} 张照片】\n`+(best.text||'')); preps[preps.length-1]=prep;
+      $('bar').style.width=Math.round(5+((i+1)/selectedFiles.length)*90)+'%';
+      $('status').textContent=`已识别完第 ${i+1}/${selectedFiles.length} 张`+(i+1<selectedFiles.length?`，继续下一张…`:'，正在合并结果…');
     }
-    await worker.terminate();
-    _lastPrep=prep;
-    best=await tryPaddleFallback(prep,best,false);
-    _lastBest=best;
-    render(best.r,best.text);
+    if(worker){ await worker.terminate(); worker=null; }
+    const merged=mergeParsedReceipts(parts);
+    const raw=rawParts.join('\n\n');
+    _lastPreps=preps; _lastPrep=preps[0]||null; _lastParts=parts; _lastRawParts=rawParts;
+    _lastBest={r:merged,text:raw};
+    render(merged,raw);
     const rb=$('retryPaddle'); if(rb){ rb.style.display='block'; }
-    $('status').textContent='识别完成，请往下核对结果'; $('bar').style.width='100%';
+    $('status').textContent=`识别完成（共 ${selectedFiles.length} 张已合并），请往下核对结果`; $('bar').style.width='100%';
   }catch(err){
     $('status').textContent='识别没成功：'+(err&&err.message?err.message:err)+' 请换一张更清楚的照片再试。';
-  }finally{ $('start').disabled=false; }
+  }finally{
+    if(worker){ try{await worker.terminate();}catch(e){} }
+    _ocrRunning=false; _currentOcrTotal=0;
+    $('start').disabled=!selectedFiles.length;
+    $('start').textContent=selectedFiles.length?`全部选好了，开始识别（共 ${selectedFiles.length} 张）`:'全部选好了，开始识别';
+  }
 });
+let _currentOcrIndex=0, _currentOcrTotal=0;
 
-let _lastPrep=null, _lastBest=null, _paddleOcr=null;
+let _lastPrep=null, _lastBest=null, _paddleOcr=null, _lastPreps=[], _lastParts=[], _lastRawParts=[], _expectedCount=null;
 function paddleItemsToLines(items){
   const toks=(items||[]).map(it=>{
     const poly=it.poly||it.box||[]; let xs=[],ys=[];
@@ -199,18 +338,21 @@ function render(r,raw){
   $('saveMsg').style.display='none'; const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库';
   const setNum=(id,v,conf)=>{ const el=$(id); el.value=(v===''||v===null||v===undefined)?'':v; const w=warnCell(el.value,conf); el.classList.toggle('warn',w.bad); el.title=w.bad?'请重点核对':''; };
   setNum('store',r.store_code,r.store_confidence);
-  setNum('date',r.purchase_date,r.date_confidence);
+  setNum('date',r.purchase_date?String(r.purchase_date).replace(/-/g,'/'):'',r.date_confidence);
+  validateDateField(true);
   setNum('total',r.total!==null?r.total.toFixed(2):'',r.total_confidence);
   setNum('subtotal',(r.subtotal!==null&&r.subtotal!==undefined)?Number(r.subtotal).toFixed(2):'',0.99);
   if(r.subtotal===null||r.subtotal===undefined) $('subtotal').classList.add('warn');
   setNum('countInput',r.product_count, r.count_mismatch?0.3:0.99);
-  _currentItems=r.items||[];
+  _currentItems=r.items||[]; _expectedCount=(r.expected_item_count!==null&&r.expected_item_count!==undefined)?r.expected_item_count:null;
   const tb=$('items'); tb.innerHTML='';
-  if(!r.items.length) tb.innerHTML='<tr><td colspan="3" class="warn">一件商品都没认出来 ⚠ 请核对：请拍正、拍清楚再试</td></tr>';
+  if(!r.items.length) tb.innerHTML='<tr><td colspan="4" class="warn">一件商品都没认出来 ⚠ 请核对：请拍正、拍清楚再试</td></tr>';
+  let _prevItem=null;
   for(const it of r.items){
     const tr=document.createElement('tr'); tr.className='itemrow';
     const numBad=(it.price===''||!/^\d{3,}$/.test(String(it.item_code)));
-    tr.innerHTML='<td><input class="field f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td>';
+    const isDupAdjacent=!!(_prevItem && String(_prevItem.item_code||'')===String(it.item_code||'') && it.item_code!=='' && typeof it.price==='number' && typeof _prevItem.price==='number' && Number(it.price)===Number(_prevItem.price));
+    tr.innerHTML='<td><input class="field f-code" inputmode="numeric" type="text" autocomplete="off" aria-label="商品代码"></td><td><input class="field f-name" type="text" autocomplete="off" aria-label="商品名称"><div class="noteTxt"></div></td><td><input class="field f-price" inputmode="decimal" type="text" autocomplete="off" aria-label="商品价格" placeholder="没认出来"></td><td><button type="button" class="rowdelbtn" aria-label="删除这行">🗑 删除这行</button></td>';
     const codeEl=tr.querySelector('.f-code'), nameEl=tr.querySelector('.f-name'), priceEl=tr.querySelector('.f-price');
     codeEl.value=it.item_code||''; nameEl.value=it.item_name||''; priceEl.value=(it.price===''||it.price===null||it.price===undefined)?'':Number(it.price).toFixed(2);
     if(!/^\d{3,}$/.test(String(it.item_code))) codeEl.classList.add('warn');
@@ -218,11 +360,18 @@ function render(r,raw){
     const note=tr.querySelector('.noteTxt');
     if(it.name_corrected){ note.className='note'; note.textContent='✓ 已自动纠正名称，请扫一眼'; }
     else if(it.name_similarity!==undefined&&it.name_similarity<0.6){ note.className='note2'; note.textContent='名称可能有一两个错字'; }
+    if(isDupAdjacent){ codeEl.classList.add('warn'); priceEl.classList.add('warn'); const dn=document.createElement('div'); dn.className='dupnote'; dn.textContent='⚠ 和上一行代码、价格完全一样，可能是长小票分张拍时接缝处重复了。请核对：不需要这一行就点右边「🗑 删除这行」。'; nameEl.parentElement.appendChild(dn); }
+    tr.querySelector('.rowdelbtn').addEventListener('click',()=>{
+      const next=tr.nextElementSibling;
+      if(next && next.querySelector && next.querySelector('.f-discount')) next.remove();
+      tr.remove(); refreshCountAfterRowEdit();
+    });
+    _prevItem=it;
     tb.appendChild(tr);
     if(it.discount!==''&&it.discount!==undefined&&it.discount!==null){
       const d=document.createElement('tr'); d.className='itemrow-discount';
       // discount belongs to previous item; store as hidden-ish editable row linked to previous item input via data on previous row
-      d.innerHTML='<td></td><td class="disc">↳ 折扣（属于上面这件商品） $</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td>';
+      d.innerHTML='<td></td><td class="disc">↳ 折扣（属于上面这件商品） $</td><td><input class="field f-discount" inputmode="decimal" type="text" autocomplete="off" aria-label="折扣金额"></td><td></td>';
       d.querySelector('.f-discount').value=Number(it.discount).toFixed(2);
       // attach discount input to previous item row for collect: move node reference
       tr.dataset.hasDiscount='1';
@@ -241,6 +390,18 @@ function render(r,raw){
   } else $('amount').textContent='';
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
+}
+function refreshCountAfterRowEdit(){
+  const n=document.querySelectorAll('#items tr.itemrow').length;
+  const ci=$('countInput'); if(ci) ci.value=n;
+  if(_expectedCount!==null && _expectedCount!==undefined){
+    const mismatch=n!==_expectedCount;
+    $('count').textContent=mismatch?(`件数核对：现在有 ${n} 件，小票底部写 ${_expectedCount} 件，对不上 ⚠ 请重点核对（有重复行就删掉重复行）`):(`件数核对：现在 ${n} 件，和小票底部 ${_expectedCount} 件对上了 ✓`);
+    $('count').className=mismatch?'big warn':'big';
+  } else {
+    $('count').textContent=`件数核对：现在有 ${n} 件商品（小票底部件数没认出来，没法自动核对）`;
+    $('count').className='big';
+  }
 }
 // Re-wire collect to handle discount rows in DOM order
 collectReceipt=function(){
@@ -306,12 +467,23 @@ renderRecords();
 
 const _rb=$('retryPaddle');
 if(_rb) _rb.addEventListener('click',async()=>{
-  if(!_lastPrep||!_lastBest) return;
+  if(!_lastPreps||!_lastPreps.length||!_lastParts||!_lastParts.length) return;
   _rb.disabled=true;
-  const better=await tryPaddleFallback(_lastPrep,_lastBest,true);
-  _lastBest=better; render(better.r,better.text);
-  $('status').textContent='已重新识别，请往下核对结果';
-  _rb.disabled=false;
+  try{
+    const parts=[], rawParts=[];
+    for(let i=0;i<_lastPreps.length;i++){
+      $('status').textContent=`正在用更强的识别重新识别第 ${i+1}/${_lastPreps.length} 张…`;
+      const cur={r:_lastParts[i],text:_lastRawParts[i]||''};
+      const better=await tryPaddleFallback(_lastPreps[i],cur,true);
+      parts.push(better.r); rawParts.push(`【第 ${i+1} 张照片】\n`+(better.text||''));
+    }
+    _lastParts=parts; _lastRawParts=rawParts;
+    const merged=mergeParsedReceipts(parts);
+    const raw=rawParts.join('\n\n');
+    _lastBest={r:merged,text:raw};
+    render(merged,raw);
+    $('status').textContent='已重新识别并合并，请往下核对结果';
+  }finally{ _rb.disabled=false; }
 });
 </script>
 </body>
