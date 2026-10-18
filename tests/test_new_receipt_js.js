@@ -12,5 +12,5 @@ assert.strictEqual(r.product_count,5); assert.strictEqual(r.count_mismatch,false
 assert.deepStrictEqual(r.items.map(i=>i.item_code),['326031','6262016','695035','30859','31574']);
 assert.deepStrictEqual(r.items.map(i=>i.price),[16.49,23.99,9.49,6.99,33.78]);
 assert.strictEqual(r.items[0].item_name,'CHICKEN STRP'); assert.strictEqual(r.items[1].item_name,'KS BATH');
-assert.strictEqual(r.subtotal,90.91); assert.strictEqual(r.items_sum,90.74); assert.strictEqual(r.amount_diff,0.17);
+assert.strictEqual(r.subtotal,90.91); assert.strictEqual(r.items_sum,90.74); assert.strictEqual(r.fees_sum,0.17); assert.deepStrictEqual(r.items[2].attached_fees.map(f=>f.amount),[0.07,0.10]); assert.strictEqual(r.amount_diff,0); // 费用挂在 ORGANIC 下面、完整加总与总计对到 0
 console.log('test_new_receipt_js: PASS 5/5 codes+prices, names corrected:',r.items.map(i=>i.item_name).join(' | '));
