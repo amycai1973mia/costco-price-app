@@ -27,7 +27,7 @@ table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:
 .qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
 </style></head>
 <body><main>
-<p><a href="./index.html">🏠 返回主菜单</a></p>
+<p><a href="./home.html">🏠 返回主菜单</a></p>
 
 <section id="view-home">
 <h1>🛒 待购清单</h1>
@@ -124,7 +124,7 @@ function localNowISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0')
 function priceNum(r){ const v=parseFloat(r.price); return isNaN(v)?null:v; }
 function clearCurrent(){ confirmItems=[]; $('fileCamera').value=''; $('fileAlbum').value=''; $('ocrStatus').textContent='可以一次选多张，全部识别完会先到下一个页面让你核对（待确认），确认后先保存为未入库草稿，不点不存。'; $('confirmRows').innerHTML=''; }
 function showDone(text){ $('doneMsg').textContent=text; show('done'); }
-$('doneHome').addEventListener('click',()=>{ clearCurrent(); location.href='./index.html'; });
+$('doneHome').addEventListener('click',()=>{ clearCurrent(); location.href='./home.html'; });
 $('doneQuery').addEventListener('click',async()=>{ clearCurrent(); await renderQuery(); show('query'); });
 $('confirmBack').addEventListener('click',()=>{ clearCurrent(); show('home'); });
 

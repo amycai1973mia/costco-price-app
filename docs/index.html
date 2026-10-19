@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Costco 小票助手</title>
+<script>if(/^https?:$/.test(location.protocol)&&new URLSearchParams(location.search).get('view')!=='receipts'){location.replace('./home.html');}</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="parser.js"></script>
 <script src="preprocess.js"></script>
@@ -673,7 +674,7 @@ function resetToHome(){
   $('raw').textContent=''; $('count').textContent=''; $('amount').textContent=''; const fa=$('fullAmount'); if(fa) fa.textContent='';
   $('bar').style.width='0%'; $('status').textContent='还没有选照片：请先点「📷 拍照」或「🖼 从相册选」';
   const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认内容无误，保存为未入库草稿'; $('saveMsg').style.display='none';
-  renderThumbs(); renderRecords(); showHomeView(); updateHomeStats(); window.scrollTo({top:0,behavior:'smooth'});
+  renderThumbs(); renderRecords(); if(new URLSearchParams(location.search).get('view')==='receipts'){showReceiptView();}else{showHomeView();} updateHomeStats(); window.scrollTo({top:0,behavior:'smooth'});
 }
 $('backHome').addEventListener('click',resetToHome);
 // --- 与待购同一套节奏：手工下一层 -> 待确认核对 -> 保存草稿；查询是下一层 ---
@@ -745,7 +746,10 @@ const _gwh=$('goWishlistHome'); if(_gwh) _gwh.addEventListener('click',()=>{ loc
 const _gah=$('goAlertsHome'); if(_gah) _gah.addEventListener('click',()=>{ $('adminPanel').style.display='none'; $('alertsPanel').style.display='block'; $('alertsPanel').scrollIntoView({behavior:'smooth',block:'center'}); });
 const _gad=$('goAdminHome'); if(_gad) _gad.addEventListener('click',()=>{ $('alertsPanel').style.display='none'; $('adminPanel').style.display='block'; $('adminPanel').scrollIntoView({behavior:'smooth',block:'center'}); });
 document.querySelectorAll('.panelBackHome').forEach(b=>b.addEventListener('click',()=>{ $('alertsPanel').style.display='none'; $('adminPanel').style.display='none'; window.scrollTo({top:0,behavior:'smooth'}); }));
-const _tbh=$('topBackHome'); if(_tbh) _tbh.addEventListener('click',resetToHome);
+function goTotalHome(){resetToHome(); location.href='./home.html';}
+const _tbh=$('topBackHome'); if(_tbh) _tbh.addEventListener('click',goTotalHome);
+const _bh=$('backHome'); if(_bh){_bh.removeEventListener('click',resetToHome); _bh.addEventListener('click',goTotalHome);}
+if(new URLSearchParams(location.search).get('view')==='receipts'){showReceiptView();}
 updateHomeStats();
 
 const _rb=$('retryPaddle');

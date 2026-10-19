@@ -240,3 +240,16 @@
 
 测试数据清理：Flask 临时 TEST/TESTHOME 用户及其小票/待购/提醒已清理，测后核查 users 剩1个既有账号，receipts/receipt_items/wishlist/alerts 均为0；手机测试用 /tmp 临时 Chrome 配置（已删除），不留正式草稿；截图为另用临时配置拍的干净首页（0张/0件）。手机 OCR 识别链路本轮未改，以既往真票记录为准。
 > 记录63 推送后复验：commit 8545963 已 push；唯一对外链接 https://amycai1973mia.github.io/costco-price-app/ 返回 200，约 60 秒传播后抓到新版总首页（含 goReceiptsHome/goWishlistHome 与草稿计数行），确认为新版不是旧版缓存。
+
+## 2o. 本轮记录（2026-10-19，链接归属纠正：截图那页做成正式唯一入口，记录64）
+
+> 调查：截图逐字特征（顶部红条「框架演示/不是正式程序」、主页要短干净、示意数字、四入口、主页原则黄框、底部「整体框架演示·2026-10-18存档…现在还没有改」）只命中仓库根目录 `整体框架-主页示意.html`；用户本轮附件里的 html 文件与它 diff 相同。Pages 源为 main 分支 /docs，该文件不在 docs/，实测 https://amycai1973mia.github.io/costco-price-app/整体框架-主页示意.html （编码后）返回 404。上轮记录63 改的是 `docs/index.html` 并给根链接 https://amycai1973mia.github.io/costco-price-app/ ，与截图页不是同一文件、也不是同一网址——这是上轮给错/混淆之处。
+> 修正：新建 `docs/home.html` 为截图那页的正式版（版式顺序同截图：标题→只有几个大入口→计数→已买小票红→待购清单蓝→我的提醒橙→运营后台灰，运营后台先放上面；去掉演示/示意/还没有改/主页原则等字样；计数如实显示未入库草稿/待购草稿，不冒充已入库；手机未直连总库只留一行如实提示）。已买→`docs/index.html?view=receipts`，待购→`docs/wishlist.html`，二者及小票完成页「返回主菜单」都回 `docs/home.html`；根链接 `docs/index.html` 无参数打开时自动 `location.replace('./home.html')`。唯一对外链接：https://amycai1973mia.github.io/costco-price-app/home.html
+
+| 序号 | 日期 | 测试项 | 预期 | 实际 | 结果 |
+|---|---|---|---|---|---|
+| 64a | 2026-10-19 | 390px 无头 Chrome 真点正式总首页（本地 docs http 服务） | 与截图版式一致且为正式新版、四入口可点、演示字样清零、计数如实 | 18项全 PASS：打开 home.html 标题/副文/计数行在，四入口顺序已买<待购<提醒<运营且颜色红/蓝/橙/灰同截图；「框架演示/不是正式程序/按钮不会真的存数据/示意/主页原则/整体框架/还没有改/存在本机」均不在页面；提醒与运营后台点开如实提示；根链接 `/` 自动转到 home.html；截图 `总首页-截图页正式版390-截图.png` 人工看图版式同截图 | 通过 |
+| 64b | 2026-10-19 | 两条线走通并返回唯一总入口 | 已买：手工下一层→待确认未保存→确认保存草稿→返回回 home 且计数变1；待购：手工保存→计数变1→返回回 home | 小票 PASS：`index.html?view=receipts` 直接进小票层、手工卡可开，填 1694477/PEROGIES TEST64/16.99 进待确认时 IDB=0、确认后 IDB=1、点完成页返回主菜单回到 home.html 且首页显示「未入库草稿 1 张」；待购 PASS（计数证实）：从总首页进 wishlist 手工 1412124/TEST64 OATS/11.99 后总首页显示「待购草稿 1 件」，wishlist 顶部返回链接指向 home.html 并真点回到 home。测试用 /tmp 隔离 Chrome 配置，不留正式数据 | 通过（手机草稿流程）；手机直连总库仍未打通，如实 |
+| 64c | 2026-10-19 | JS 回归 | parser/去重不回退 | `test_dedup_js.js` ALL PASS、`test_new_receipt_js.js` PASS 5/5；Flask 代码本轮未改，记录63 的 Flask 回归不重复冒充本轮新测 | 通过 |
+
+> 记录64 推送后复验待补：push 后复查 https://amycai1973mia.github.io/costco-price-app/home.html 与根链接跳转，见下方补记。

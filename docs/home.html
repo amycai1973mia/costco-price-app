@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Costco 小票助手</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#eef1f4;color:#1a1a1a}
+  .phone{max-width:430px;margin:0 auto;background:#fff;min-height:100vh;padding:14px 14px 40px;box-shadow:0 0 18px rgba(0,0,0,.12)}
+  h1{font-size:27px;margin:10px 0 4px}
+  .sub{font-size:17px;color:#444;margin:0 0 14px;line-height:1.5}
+  .stats{font-size:16px;background:#f4f6f8;border-radius:12px;padding:10px 12px;margin-bottom:16px;line-height:1.5}
+  .entry{display:block;width:100%;text-align:left;border:0;border-radius:16px;padding:20px 18px;margin:0 0 14px;font-size:23px;font-weight:700;cursor:pointer;line-height:1.35;color:#fff;text-decoration:none}
+  .entry small{display:block;font-size:16px;font-weight:400;margin-top:5px;opacity:.92}
+  .red{background:#c8102e;color:#fff}
+  .blue{background:#1565c0;color:#fff}
+  .green{background:#1b7a3d;color:#fff}
+  .orange{background:#e65100;color:#fff}
+  .grey{background:#eceff1;color:#263238;border:2px solid #b0bec5}
+  .note{font-size:15px;color:#555;line-height:1.6;background:#e8f3ff;border:1px solid #9ec5ea;border-radius:10px;padding:9px 11px}
+  .panel{border:2px solid #1565c0;border-radius:12px;padding:14px;margin:12px 0;background:#eef6ff;font-size:16px;line-height:1.6}
+  .panel button{background:#fff;color:#1565c0;border:2px solid #1565c0;border-radius:12px;font-size:18px;padding:12px;width:100%;cursor:pointer}
+  .footer{font-size:14px;color:#777;text-align:center;margin-top:26px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="phone">
+  <section id="view-home">
+    <h1>Costco 小票助手</h1>
+    <p class="sub">只有几个大入口。<br>填东西、查东西，都点进去下一层再做。</p>
+    <div class="stats" id="homeStats">未入库草稿 0 张 · 待购草稿 0 件</div>
+
+    <a class="entry red" href="./index.html?view=receipts">🧾 已买小票<small>点进去：拍照录小票、查以前入库的小票</small></a>
+    <a class="entry blue" href="./wishlist.html">🛒 待购清单<small>未来想买、等打折再买的东西</small></a>
+    <button type="button" class="entry orange" id="goAlerts">🔔 我的提醒<small>待购打折了、买过的降价了，在这里提醒</small></button>
+    <button type="button" class="entry grey" id="goAdmin">⚙️ 运营后台<small>只有运营者能看见，客户看不到</small></button>
+
+    <p class="note">手机版还没连上后台总数据库，确认后先存未入库草稿（待同步，未进总库），不叫已入库。</p>
+
+    <div class="panel" id="alertsPanel" style="display:none"><b>🔔 我的提醒</b><p>提醒要在后台总数据库里，把打折数据和已入库小票、待购对上后才会生成。手机版还没连上总库，所以这里暂时看不到真提醒；请在后台总库版登录后查看。</p><button type="button" class="panelBack">🏠 返回主菜单</button></div>
+    <div class="panel" id="adminPanel" style="display:none"><b>⚙️ 运营后台</b><p>运营后台在后台总库版里，只有运营者账号能进，普通账号进去会提示无权访问。手机公开页不能直接进真后台。</p><button type="button" class="panelBack">🏠 返回主菜单</button></div>
+  </section>
+  <p class="footer">Costco 小票助手</p>
+</div>
+<script>
+async function countIDB(dbName,storeName){try{if(indexedDB.databases){const ds=await indexedDB.databases();if(!ds.some(d=>d.name===dbName))return 0;}const db=await new Promise((res,rej)=>{const rq=indexedDB.open(dbName,1);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);});if(!db.objectStoreNames.contains(storeName)){db.close();return 0;}const n=await new Promise((res,rej)=>{const rq=db.transaction(storeName,'readonly').objectStore(storeName).count();rq.onsuccess=()=>res(rq.result||0);rq.onerror=()=>rej(rq.error);});db.close();return n;}catch(e){return 0;}}
+async function updateStats(){const a=await countIDB('costco-receipts','receipts');const b=await countIDB('costco-wishlist','wishlist');document.getElementById('homeStats').textContent='未入库草稿 '+a+' 张 · 待购草稿 '+b+' 件';}
+function showPanel(id){document.getElementById('alertsPanel').style.display=id==='alertsPanel'?'block':'none';document.getElementById('adminPanel').style.display=id==='adminPanel'?'block':'none';document.getElementById(id).scrollIntoView({behavior:'smooth',block:'center'});}
+document.getElementById('goAlerts').addEventListener('click',()=>showPanel('alertsPanel'));
+document.getElementById('goAdmin').addEventListener('click',()=>showPanel('adminPanel'));
+document.querySelectorAll('.panelBack').forEach(b=>b.addEventListener('click',()=>{document.getElementById('alertsPanel').style.display='none';document.getElementById('adminPanel').style.display='none';window.scrollTo({top:0,behavior:'smooth'});}));
+updateStats();
+</script>
+</body>
+</html>
