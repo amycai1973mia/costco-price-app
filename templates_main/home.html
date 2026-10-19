@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block body %}
 <h1>Costco 小票助手</h1>
-<p class="big">你已入库 {{ stats.receipts }} 张小票 · 待购 {{ stats.wishlist }} 件 · 未读提醒 {{ stats.alerts }} 条</p>
+<p class="big" style="background:#e8f3ff;border:2px solid #005daa;border-radius:10px;padding:12px">已入库 = 已进入后台总数据库；未点确认前只是待确认，不算入库。</p><p class="big">你已入库 {{ stats.receipts }} 张小票 · 待购 {{ stats.wishlist }} 件 · 未读提醒 {{ stats.alerts }} 条</p>
 <a class="second-btn" href="/receipts/new">🧾 已买小票（录入 / 查询）</a>
 <a class="second-btn" href="/wishlist">🛒 待购清单（等打折再买）</a>
 <a class="second-btn" href="/alerts">🔔 我的提醒</a>

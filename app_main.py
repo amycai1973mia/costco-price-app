@@ -333,51 +333,6 @@ def receipt_done(receipt_id):
     if r is None: abort(404)
     return render_template("receipt_done.html", r=r)
 
-@app.route("/receipts/import-json", methods=["POST"])
-@login_required
-def receipt_import_json():
-    """导入手机版（Pages/IndexedDB）导出的已入库小票 JSON，写入正式库；重复的跳过并报数。"""
-    f = request.files.get("receipts_json")
-    if not f or not f.filename: flash("请先选择手机版导出的 JSON 文件。"); return redirect(url_for("receipts_new"))
-    try:
-        payload = json.loads(f.read().decode("utf-8-sig"))
-        records = payload.get("receipts", []) if isinstance(payload, dict) else payload
-        if not isinstance(records, list): raise ValueError("格式不对")
-    except Exception as e:
-        flash(f"导入失败，文件格式不对：{e}"); return redirect(url_for("receipts_new"))
-    con = db(); imported = 0; skipped = 0
-    for rec in records:
-        if not isinstance(rec, dict): skipped += 1; continue
-        items = []
-        for raw in rec.get("items", []):
-            ef = dp = 0.0
-            for fee in raw.get("attached_fees", []) or []:
-                nm = (fee.get("fee_name") or "").upper(); amt = fnum(fee.get("amount"))
-                if "ENVIRO" in nm: ef += amt
-                elif "DEP" in nm or "POSIT" in nm: dp += amt
-                else: ef += amt
-            items.append(dict(item_code=(raw.get("item_code") or "").strip(), item_name=(raw.get("item_name") or "").strip(),
-                              price=fnum(raw.get("price")), discount=fnum(raw.get("discount")), enviro_fee=round(ef, 2), deposit=round(dp, 2),
-                              quantity=int(fnum(raw.get("quantity"), 1)), is_manual=1 if raw.get("manual") else 0, line_order=len(items)))
-        # 未挂到商品的独立费用行计入费用合计（金额对得上优先；字段归属以商品上的费用为准）
-        fees_total = round(sum(it["enviro_fee"] + it["deposit"] for it in items) + sum(fnum(x.get("amount")) for x in (rec.get("fees") or [])), 2)
-        total = fnum(rec.get("total")) if rec.get("total") not in (None, "") else round(fnum(rec.get("subtotal")) + fees_total + fnum(rec.get("tax")), 2)
-        store_code = (rec.get("store_code") or "").strip(); purchase_date = norm_date(rec.get("purchase_date", "")); invoice_no = (rec.get("invoice_no") or "").strip()
-        dup = None
-        if invoice_no: dup = con.execute("SELECT 1 FROM receipts WHERE user_id=? AND invoice_no=?", (session["user_id"], invoice_no)).fetchone()
-        if dup is None and store_code and purchase_date and total:
-            dup = con.execute("SELECT 1 FROM receipts WHERE user_id=? AND store_code=? AND purchase_date=? AND ABS(total-?)<0.005 AND item_count=?",
-                              (session["user_id"], store_code, purchase_date, total, len(items))).fetchone()
-        if dup: skipped += 1; continue
-        if not items: skipped += 1; continue
-        insert_receipt(con, session["user_id"], store_code, purchase_date,
-                       fnum(rec.get("subtotal")) if rec.get("subtotal") not in (None, "") else round(sum(it["price"] + it["discount"] for it in items), 2),
-                       fees_total, fnum(rec.get("tax")), total, items, "", "phone_import", invoice_no)
-        imported += 1
-    con.commit(); con.close()
-    flash(f"导入完成：新入 {imported} 张，跳过 {skipped} 张（重复或没有商品）。")
-    return redirect(url_for("receipts_list"))
-
 @app.route("/receipts")
 @login_required
 def receipts_list():
@@ -824,7 +779,7 @@ def admin_reset_pw(uid):
     temp = request.form.get("temp_password", "")
     if len(temp) < 6: flash("临时密码至少 6 位。"); return redirect(url_for("admin_home"))
     con = db(); con.execute("UPDATE users SET password_hash=?,updated_at=datetime('now') WHERE id=?", (generate_password_hash(temp), uid)); con.commit(); con.close()
-    flash("已为该用户设置临时密码，请线下告诉用户，登录后尽快修改（本地版暂无自助改密页，见说明）。"); return redirect(url_for("admin_home"))
+    flash("已为该用户设置临时密码，请线下告诉用户，登录后尽快修改（目前暂无自助改密页）。"); return redirect(url_for("admin_home"))
 
 FIELD_ALIASES = {"item_code": ["item_code", "code", "商品代码", "代码"], "item_name": ["item_name", "name", "商品名称", "名称"],
                  "original_price": ["original_price", "原价"], "sale_price": ["sale_price", "折后价", "折后", "售价"],

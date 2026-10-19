@@ -3,7 +3,7 @@
 """小票录入→正式数据库专项自测（TEST 账号，测完清理）。
 运行: .venv/bin/python tests/test_receipts_db.py [--ocr]
 覆盖: 未点入库查不到 / 确认入库字段逐项 / 防重提示 / 用户隔离 / 历史三查+加入待购 /
-      多张合并函数 / 手机版JSON导入正式库+导入防重 / 入库后返回主菜单完成页。"""
+      多张合并函数 / 入库后返回主菜单完成页。手机导出导入中间环节已取消（记录62）。"""
 import io, json, sqlite3, sys
 from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
@@ -82,31 +82,17 @@ try:
     m = app_main.merge_receipt_parts([p1, p2])
     assert [i["item_code"] for i in m["items"]] == ["1", "2", "3"] and m["total"] == 30.0 and m["store_code"] == "255", m
     print("PASS 5 多张合并：接缝重复去掉、总计取最后一张、件数=3")
-    # 6) 手机版导出 JSON 导入正式库 + 导入防重
-    payload = {"app": "costco-price-app", "kind": "receipts", "receipts": [
-        {"store_code": "255", "purchase_date": "2026/10/05", "subtotal": 10.0, "tax": 0.5, "total": 10.67, "item_count": 1,
-         "items": [{"item_code": "2220001", "item_name": "PHONE ITEM", "price": 10.0, "discount": "", "manual": False,
-                    "attached_fees": [{"fee_name": "ENVIRO FEE", "amount": 0.07}, {"fee_name": "DEPOSIT", "amount": 0.10}]}], "fees": []}]}
-    data = {"receipts_json": (io.BytesIO(json.dumps(payload).encode()), "costco-receipts-export.json")}
-    r = c.post("/receipts/import-json", data=data, content_type="multipart/form-data", follow_redirects=True)
-    assert "新入 1 张" in r.get_data(as_text=True), r.get_data(as_text=True)[:300]
-    it = sql("SELECT i.* FROM receipt_items i JOIN receipts r ON r.id=i.receipt_id WHERE r.user_id=? AND i.item_code='2220001'", (uid,))[0]
-    assert abs(it["enviro_fee"]-0.07)<1e-9 and abs(it["deposit"]-0.10)<1e-9
-    data = {"receipts_json": (io.BytesIO(json.dumps(payload).encode()), "costco-receipts-export.json")}
-    r = c.post("/receipts/import-json", data=data, content_type="multipart/form-data", follow_redirects=True)
-    assert "新入 0 张" in r.get_data(as_text=True) and "跳过 1 张" in r.get_data(as_text=True)
-    print("PASS 6 手机版导出JSON可导入正式库（费用挂回商品），重复导入跳过")
-    count = sql("SELECT COUNT(*) c FROM receipts WHERE user_id=?", (uid,))[0]["c"]
-    assert count == 3, count
+    # 6) 中间环节已取消：导入正式库路由不存在
+    assert c.post("/receipts/import-json", data={}).status_code == 404
+    print("PASS 6 已取消手机导出→导入正式库中间环节（/receipts/import-json 不存在）")
     # 7) Excel式小票查询：按日期/名称/代码/总计查、点开每件、每行删除
     for qs in ["date_from=2026-10-01&date_to=2026-10-31", "keyword=TESTITEM", "code=1110001", "total_min=20&total_max=24"]:
         assert "TESTITEM ONE" not in c.get(f"/receipts?{qs}").get_data(as_text=True) or True  # 小票行本身不列商品名，靠明细验证
         assert "2026-10-03" in c.get(f"/receipts?{qs}").get_data(as_text=True), qs
     assert "TESTITEM TWO" in c.get("/history?price_min=15").get_data(as_text=True) and "TESTITEM ONE" not in c.get("/history?price_min=15").get_data(as_text=True)
     det = c.get(f"/receipts/{rec['id']}").get_data(as_text=True); assert "TESTITEM ONE" in det and "TESTITEM TWO" in det, det[:400]
-    phone = sql("SELECT r.id FROM receipts r WHERE r.user_id=? AND ABS(r.total-10.67)<0.001", (uid,))[0]
-    r = c.post(f"/receipts/{phone['id']}/delete", data={}, follow_redirects=True); assert "已删除这张小票" in r.get_data(as_text=True)
-    assert sql("SELECT COUNT(*) c FROM receipts WHERE user_id=?", (uid,))[0]["c"] == 2
+    r = c.post(f"/receipts/{rec['id']}/delete", data={}, follow_redirects=True); assert "已删除这张小票" in r.get_data(as_text=True)
+    assert sql("SELECT COUNT(*) c FROM receipts WHERE user_id=?", (uid,))[0]["c"] == 1
     print("PASS 7 Excel式查询（日期/名称/代码/总计+商品价格）、明细点开、整张删除可用")
     if "--ocr" in sys.argv:
         cc = app_main.app.test_client(); uidO = reg(cc, "test_receipts_ocr@example.com")

@@ -84,16 +84,16 @@ input.field.f-fee-amount{font-size:17px;padding:5px 6px;min-height:36px;border-w
 <main>
 <h1>Costco 小票识别试用</h1>
 <p><a href="./wishlist.html" style="font-size:22px;font-weight:700">🛒 待购清单（想买等打折）→</a></p>
-<p class="notice">✅ 照片只在您的手机本地识别，<b>不会上传服务器</b>，也不烧 AI 额度。<br>手机上识别可能要等几十秒，请耐心等一下。<br><b>手机版数据仍只存这台手机浏览器本地（IndexedDB），没有直接连上电脑上的正式数据库</b>；要进正式库，请在下面查询页点导出，再到电脑本地版导入。</p>
+<p class="notice">⚠️ <b>目前这个手机公开链接还没有连上后台总数据库，所以在手机上还不能真正入库。</b><br>照片识别在手机上做，可能要等几十秒。核对阶段叫<b>待确认</b>；确认后只能先保存为<b>未入库草稿（待同步，未进总库）</b>，<b>不叫已入库</b>。<br>真正入库请用后台总库版（在这台服务器电脑上打开 http://127.0.0.1:5004，登录同一账号后确认入库）；那边点「确认无误，入库」才算已入库，查询也查总库。</p>
 <div class="card" id="receiptMenu">
   <div class="big">已买小票</div>
-  <p class="small">第一行在下面拍照或从相册选；第二行手工录入（点进去再填）；下面可以查已经入到手机本地的记录。和电脑本地版、待购清单是同一套节奏：先进核对，点确认才入库。</p>
+  <p class="small">第一行在下面拍照或从相册选；第二行手工录入（点进去再填）；下面可以查未入库草稿。和待购是同一套节奏：先进待确认核对；手机上确认后先存草稿，还没进总库。</p>
   <button type="button" id="goManualReceipt" class="addbtn">✍️ 第二行：手工录入小票（点进去再填）</button>
-  <button type="button" id="goReceiptRecords" class="addbtn">🔍 查询已入库记录（手机本地）</button>
+  <button type="button" id="goReceiptRecords" class="addbtn">🔍 查询未入库草稿（待同步，未进总库）</button>
 </div>
 <div class="card" id="manualCard" style="display:none">
   <div class="big">✍️ 手工录入小票（下一层）</div>
-  <p class="small">填购买日期、门店和每件代码/名称/价格。点「填好了，去核对」会先进核对页，不会直接入库；核对页点「确认无误，入库」才存到手机本地。</p>
+  <p class="small">填购买日期、门店和每件代码/名称/价格。点「填好了，去核对」会先进核对页，不会直接入库；核对页确认后先保存为未入库草稿（待同步，未进总库），不算已入库。</p>
   <label class="flabel">门店代码</label><input class="field" id="mStore" inputmode="numeric" placeholder="例如 255">
   <label class="flabel">购买日期（只打数字）</label><input class="field" id="mDate" inputmode="numeric" placeholder="例如 20261003">
   <label class="flabel">小计 $（可留空）</label><input class="field" id="mSubtotal" inputmode="decimal">
@@ -164,32 +164,30 @@ input.field.f-fee-amount{font-size:17px;padding:5px 6px;min-height:36px;border-w
   <p id="fullAmount" class="big"></p>
   <div id="dedupBox"></div>
   <button id="retryPaddle" style="display:none">还是不准？换更强的识别再试一次（第一次慢一点）</button>
-  <div class="big" style="margin-top:18px">第 4 步：核对无误才入库</div>
-  <p class="small">没点下面这个按钮，就不会保存。这版先存在您手机浏览器本地（IndexedDB），照片和数据不上传服务器；后续正式 App 再对接云端。</p>
-  <button id="saveBtn" class="savebtn">确认无误，入库</button>
+  <div class="big" style="margin-top:18px">第 4 步：待确认（核对无误后先存草稿）</div>
+  <p class="small">这里是<b>待确认</b>：没点下面按钮，就不会保存。点确认后，手机上只保存为<b>未入库草稿（待同步，未进总库）</b>；要真正入库，需要连上后台总数据库。</p>
+  <button id="saveBtn" class="savebtn">确认内容无误，保存为未入库草稿</button>
   <button type="button" id="restartBtn" class="restartbtn">识别太差，重新再来（放弃这次，重新拍）</button>
-  <p class="small">识别错得太多、不想一条条改时，点上面这个「重新再来」：会先问您一句确认，确认后清掉这次的照片和核对内容，回到最开始重新拍。<b>已入库的记录不会动。</b></p>
+  <p class="small">识别错得太多、不想一条条改时，点上面这个「重新再来」：会先问您一句确认，确认后清掉这次的照片和核对内容，回到最开始重新拍。<b>未入库草稿不会动。</b></p>
   <div id="saveMsg" role="status"></div>
   <div id="donePanel">
-    <div class="big" id="doneText">已入库 ✓</div>
-    <p class="small">这张小票已经存好了。下面点「返回主菜单」，本次照片和核对内容会清空，干干净净准备下一张；已入库的记录还在下面「已入库记录」里能查到。</p>
+    <div class="big" id="doneText">已保存为未入库草稿（还没入库）</div>
+    <p class="small">这张已保存为未入库草稿（还没进总库）。下面点「返回主菜单」，本次照片和核对内容会清空；草稿还在下面「未入库草稿」里能查到。</p>
     <button type="button" id="backHome" class="savebtn">🏠 返回主菜单（清空本次，准备下一张）</button>
-    <button type="button" id="doneQuery" class="addbtn">🔍 查询已入库记录</button>
+    <button type="button" id="doneQuery" class="addbtn">🔍 查询未入库草稿</button>
   </div>
   <details><summary class="small">查看识别到的原始文字（核对用）</summary><pre id="raw" style="white-space:pre-wrap;font-size:14px"></pre></details>
 </div>
 
 <div class="card" id="recordsCard" style="display:none">
-  <div class="big">已入库记录（存在本机）</div>
-  <p class="small">这里能看到您点过「确认无误，入库」的小票。没入库的识别结果，刷新页面就没了，不会保存。</p>
-  <button id="refreshRecords">查看已入库记录</button>
-  <div id="recordsTools"><label class="flabel">按日期 / 名称 / 代码 / 价格查（在已入库记录里筛）</label><input class="field" id="recordSearch" placeholder="例如 2026/10、PEROGIES、1694477 或 16.99"><p class="small">查询会在下面列表里筛选；每一张下面有删除，点删除会先问一句确认。</p></div>
+  <div class="big">未入库草稿（待同步，未进总库）</div>
+  <p class="small">这里能看到您在手机上确认后保存的草稿。<b>这些还没进后台总数据库，不叫已入库。</b>没保存草稿的识别结果，刷新页面就没了。</p>
+  <button id="refreshRecords">查看未入库草稿</button>
+  <div id="recordsTools"><label class="flabel">按日期 / 名称 / 代码 / 价格查（在未入库草稿里筛）</label><input class="field" id="recordSearch" placeholder="例如 2026/10、PEROGIES、1694477 或 16.99"><p class="small">查询会在下面草稿列表里筛选；每一张下面有删除，点删除会先问一句确认。删草稿不影响总库（草稿还没进总库）。</p></div>
   <div id="records"></div>
-  <button id="exportRecords" type="button">⬇ 导出已入库记录（给正式库导入）</button>
-  <p class="small">导出的文件可以在正式版「已买小票」页里导入正式数据库，重复的小票会自动跳过。这版数据先存在本机，不导出不会自动进正式库。</p>
-  <button id="clearRecords" class="clearbtn">清空全部已入库记录</button>
+  <button id="clearRecords" class="clearbtn">清空全部未入库草稿</button>
 </div>
-<p class="small">网页试用版：浏览器本地 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和电脑本地版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
+<p class="small">网页试用版：手机上 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和后台总库版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
 </main>
 <script>
 let selectedFiles=[]; // [{file,url}] 按用户选入顺序识别、合并
@@ -491,7 +489,7 @@ function sumsFromDOM(){
 
 function render(r,raw){
   $('result').style.display='block';
-  $('saveMsg').style.display='none'; const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库';
+  $('saveMsg').style.display='none'; const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认内容无误，保存为未入库草稿';
   const setNum=(id,v,conf)=>{ const el=$(id); el.value=(v===''||v===null||v===undefined)?'':v; const w=warnCell(el.value,conf); el.classList.toggle('warn',w.bad); el.title=w.bad?'请重点核对':''; };
   setNum('store',r.store_code,r.store_confidence);
   setNum('date',r.purchase_date?String(r.purchase_date).replace(/-/g,'/'):'',r.date_confidence);
@@ -526,7 +524,7 @@ function render(r,raw){
       db.innerHTML='<p class="small">多张合并：没有发现接缝重复段，已按原样合并（同一件买两件的不会被自动删）。</p>';
     } else db.innerHTML='';
   }
-  const _cb=$('confirmBanner'); if(_cb) _cb.textContent=`共识别到 ${r.product_count ?? (r.items||[]).length} 件，请核对。核对正确后点「确认无误，入库」才算入库。`;
+  const _cb=$('confirmBanner'); if(_cb) _cb.textContent=`共识别到 ${r.product_count ?? (r.items||[]).length} 件，请核对。这是待确认：核对正确后保存为未入库草稿，还没进总库，不算已入库。`;
   $('raw').textContent=raw;
   $('result').scrollIntoView({behavior:'smooth'});
 }
@@ -607,7 +605,7 @@ collectReceipt=function(){
   const cnt=numVal('countInput');
   return {store_code:$('store').value.trim(),purchase_date:$('date').value.trim(),subtotal:numVal('subtotal'),tax:numVal('tax'),total:numVal('total'),item_count:cnt!==null?Math.round(cnt):items.length,items:items,fees:fees,fees_sum:sm.fees,items_sum:sm.items,saved_at:new Date().toISOString()};
 };
-// --- IndexedDB 本地入库 (纯静态网页, 不上传) ---
+// --- 未入库草稿暂存（内部暂存，未进后台总数据库） ---
 function openDB(){ return new Promise((res,rej)=>{ const rq=indexedDB.open('costco-receipts',1); rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains('receipts')) db.createObjectStore('receipts',{keyPath:'id',autoIncrement:true}); }; rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
 async function idbAdd(rec){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction('receipts','readwrite'); tx.objectStore('receipts').add(rec); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 async function idbAll(){ const db=await openDB(); return new Promise((res,rej)=>{ const rq=db.transaction('receipts','readonly').objectStore('receipts').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }); }
@@ -620,7 +618,7 @@ async function renderRecords(){
     let all=(await idbAll()).sort((a,b)=>b.id-a.id);
     const _q=($('recordSearch')?$('recordSearch').value.trim().toLowerCase():'');
     if(_q) all=all.filter(rec=>JSON.stringify(rec).toLowerCase().includes(_q));
-    if(!all.length){ box.innerHTML='<p class="small">还没有入库记录。</p>'; return; }
+    if(!all.length){ box.innerHTML='<p class="small">还没有未入库草稿。</p>'; return; }
     box.innerHTML='';
     for(const rec of all){
       const div=document.createElement('div'); div.className='rec';
@@ -631,12 +629,12 @@ async function renderRecords(){
       const feeHtml=hasAttached?'':(rec.fees||[]).map(f=>`<div class="small">费用 ${esc(f.fee_name)} $${f.amount===''||f.amount===undefined?'—':Number(f.amount).toFixed(2)}${f.manual?'（手填）':''}</div>`).join('');
       const taxHtml=(rec.tax!==null&&rec.tax!==undefined)?`<div class="small">税 TAX $${Number(rec.tax).toFixed(2)}</div>`:'';
       det.innerHTML=((rec.items||[]).map(it=>`<div class="small">${esc(it.item_code)} ${esc(it.item_name)} $${it.price===''?'—':Number(it.price).toFixed(2)}${it.manual?'（手填）':''}${it.discount!==''&&it.discount!==undefined&&it.discount!==''?('（折扣 $'+Number(it.discount).toFixed(2)+'）'):''}</div>`+(it.attached_fees||[]).map(f=>`<div class="small disc">↳ 费用 ${esc(f.fee_name)} $${f.amount===''||f.amount===undefined?'—':Number(f.amount).toFixed(2)}${f.manual?'（手填）':''}</div>`).join('')).join('')||'<div class="small">没有商品</div>')+feeHtml+taxHtml;
-      div.querySelector('.delbtn').addEventListener('click',async()=>{ if(confirm('确定删除这一张已入库小票吗？')){ await idbDelete(rec.id); renderRecords(); } });
+      div.querySelector('.delbtn').addEventListener('click',async()=>{ if(confirm('确定删除这一张未入库草稿吗？（它还没进总库）')){ await idbDelete(rec.id); renderRecords(); } });
       box.appendChild(div);
     }
-  }catch(e){ box.innerHTML='<p class="small warn">读取已入库记录失败：'+esc(e&&e.message?e.message:e)+'</p>'; }
+  }catch(e){ box.innerHTML='<p class="small warn">读取未入库草稿失败：'+esc(e&&e.message?e.message:e)+'</p>'; }
 }
-document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ _amountWarnArmed=false; const sb=$('saveBtn'); if(sb&&!sb.disabled) sb.textContent='确认无误，入库'; if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none'; const dp=$('donePanel'); if(dp) dp.style.display='none'; } if(['subtotal','tax','total'].includes(e.target.id)) refreshAmountAfterRowEdit(); } });
+document.addEventListener('input',e=>{ if(e.target.closest&&e.target.closest('#result')){ _amountWarnArmed=false; const sb=$('saveBtn'); if(sb&&!sb.disabled) sb.textContent='确认内容无误，保存为未入库草稿'; if(sb&&sb.disabled){ sb.disabled=false; sb.textContent='确认内容无误，保存为未入库草稿'; $('saveMsg').style.display='none'; const dp=$('donePanel'); if(dp) dp.style.display='none'; } if(['subtotal','tax','total'].includes(e.target.id)) refreshAmountAfterRowEdit(); } });
 const _ub=$('undoDel'); if(_ub) _ub.addEventListener('click',()=>{
   if(!_lastDeleted) return;
   const tb=$('items'); const ref=(_lastDeleted.after&&_lastDeleted.after.parentNode===tb)?_lastDeleted.after:null;
@@ -656,11 +654,11 @@ function resetToHome(){
   for(const id of ['store','date','subtotal','tax','total','countInput']){ const el=$(id); if(el){ el.value=''; el.classList.remove('warn'); } }
   $('raw').textContent=''; $('count').textContent=''; $('amount').textContent=''; const fa=$('fullAmount'); if(fa) fa.textContent='';
   $('bar').style.width='0%'; $('status').textContent='还没有选照片：请先点「📷 拍照」或「🖼 从相册选」';
-  const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认无误，入库'; $('saveMsg').style.display='none';
+  const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认内容无误，保存为未入库草稿'; $('saveMsg').style.display='none';
   renderThumbs(); renderRecords(); window.scrollTo({top:0,behavior:'smooth'});
 }
 $('backHome').addEventListener('click',resetToHome);
-// --- 与待购/电脑本地版同一套节奏：手工下一层 -> 核对 -> 确认入库；查询是下一层 ---
+// --- 与待购同一套节奏：手工下一层 -> 待确认核对 -> 保存草稿；查询是下一层 ---
 function addManualRow(code='',name='',price=''){ const d=document.createElement('div'); d.className='rec mrow';
   d.innerHTML='<button type="button" class="rowdelbtn" style="float:right" aria-label="删除这行">✕</button><label class="flabel">代码</label><input class="field m-code" inputmode="numeric"><label class="flabel">名称</label><input class="field m-name"><label class="flabel">价格</label><input class="field m-price" inputmode="decimal">';
   d.querySelector('.m-code').value=code; d.querySelector('.m-name').value=name; d.querySelector('.m-price').value=price;
@@ -672,7 +670,7 @@ const _md=$('mDate'); if(_md) _md.addEventListener('input',()=>{ _md.value=forma
 const _mg=$('mGoConfirm'); if(_mg) _mg.addEventListener('click',()=>{
   const items=[...document.querySelectorAll('#mItems .mrow')].map(d=>({item_code:d.querySelector('.m-code').value.trim(),item_name:d.querySelector('.m-name').value.trim(),price:d.querySelector('.m-price').value.trim()===''? '':Number(d.querySelector('.m-price').value),discount:'',attached_fees:[]})).filter(it=>it.item_code||it.item_name);
   const r={store_code:$('mStore').value.trim(),purchase_date:$('mDate').value.trim(),subtotal:numVal('mSubtotal'),tax:numVal('mTax'),total:numVal('mTotal'),items:items,product_count:items.length,expected_item_count:null,count_mismatch:false,items_sum:items.reduce((a,it)=>a+(Number(it.price)||0),0),fees:[],unattached_fees:[],auto_removed_count:0,parts_count:1};
-  $('manualCard').style.display='none'; render(r,'手工录入，请核对后再点确认无误，入库。');
+  $('manualCard').style.display='none'; render(r,'手工录入，请核对后再点确认内容无误，保存为未入库草稿。');
 });
 function showRecords(){ $('recordsCard').style.display='block'; renderRecords(); $('recordsCard').scrollIntoView({behavior:'smooth'}); }
 const _gq=$('goReceiptRecords'); if(_gq) _gq.addEventListener('click',showRecords);
@@ -680,13 +678,13 @@ const _dq=$('doneQuery'); if(_dq) _dq.addEventListener('click',showRecords);
 const _rs=$('recordSearch'); if(_rs) _rs.addEventListener('input',renderRecords);
 $('restartBtn').addEventListener('click',()=>{
   if(_ocrRunning) return;
-  const ok=confirm('这次识别不要了，重新再来？\n\n会清掉这次的照片和核对内容（已经改过的也会清掉），回到最开始重新拍。\n已入库的记录不会动。');
+  const ok=confirm('这次识别不要了，重新再来？\n\n会清掉这次的照片和核对内容（已经改过的也会清掉），回到最开始重新拍。\n未入库草稿不会动。');
   if(!ok) return; // 误点/取消：什么都不清，改过的数据还在
   resetToHome();
 });
 $('saveBtn').addEventListener('click',async()=>{
   const rec=collectReceipt();
-  if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再入库。'; return; }
+  if(!rec.items.length){ $('saveMsg').style.display='block'; $('saveMsg').textContent='一件商品都没有，先识别一张小票再保存草稿。'; return; }
   // 金额对不上：先提醒差多少，不硬卡死；用户再点一次确认仍可入库
   const sm=sumsFromDOM();
   if(typeof fullAmountCheck==='function' && sm.total!==null){
@@ -694,36 +692,30 @@ $('saveBtn').addEventListener('click',async()=>{
     if(ac && ac.abs_diff>1.00 && !_amountWarnArmed){
       _amountWarnArmed=true;
       $('saveMsg').style.display='block';
-      $('saveMsg').textContent=`金额对不上：${ac.formula}，和票面总计差 $${Number(ac.abs_diff).toFixed(2)}。请先核对；如果您确认没问题，再点一次「确认仍要入库」就会存。`;
-      const sb=$('saveBtn'); sb.textContent='确认仍要入库（金额差 $'+Number(ac.abs_diff).toFixed(2)+'）';
+      $('saveMsg').textContent=`金额对不上：${ac.formula}，和票面总计差 $${Number(ac.abs_diff).toFixed(2)}。请先核对；如果您确认没问题，再点一次「确认仍要保存草稿」就会存。`;
+      const sb=$('saveBtn'); sb.textContent='确认仍要保存草稿（金额差 $'+Number(ac.abs_diff).toFixed(2)+'）';
       $('saveMsg').scrollIntoView({behavior:'smooth',block:'center'}); return;
     }
   }
-  // 防重：门店+日期+总计和已入库的一张一样时，先提醒，不静默重复入
+  // 防重（草稿）：门店+日期+总计和已保存草稿一样时，先提醒，不静默重复存
   try{
     const existing=await idbAll();
     const dup=existing.find(x=>String(x.store_code||'')===String(rec.store_code||'') && String(x.purchase_date||'')===String(rec.purchase_date||'') && rec.total!==null && x.total!==null && Math.abs(Number(x.total)-Number(rec.total))<0.005 && Number(x.item_count||0)===Number(rec.item_count||0));
-    if(dup && !confirm('这张小票可能已经入过库了（'+(rec.purchase_date||'日期没填')+' · 门店 '+(rec.store_code||'—')+' · 总计 $'+Number(rec.total).toFixed(2)+'）。\n\n如果确实是同一张，请点「取消」不要重复入；如果确实是两张一样的，请点「确定」照样入库。')){ $('saveMsg').style.display='block'; $('saveMsg').textContent='已取消：没有重复入库。'; return; }
+    if(dup && !confirm('这张小票可能已经保存过草稿了（'+(rec.purchase_date||'日期没填')+' · 门店 '+(rec.store_code||'—')+' · 总计 $'+Number(rec.total).toFixed(2)+'）。\n\n如果确实是同一张，请点「取消」不要重复存草稿；如果确实是两张一样的，请点「确定」照样保存草稿。')){ $('saveMsg').style.display='block'; $('saveMsg').textContent='已取消：没有重复保存草稿。'; return; }
   }catch(e){ /* 查防重失败不挡正常入库 */ }
   try{
     await idbAdd(rec);
     const cnt=rec.item_count;
-    const msg=`已入库 ✓ 共${cnt}件，总计 $${rec.total!==null?Number(rec.total).toFixed(2):'—'}`;
+    const msg=`已保存为未入库草稿（还没入库） 共${cnt}件，总计 $${rec.total!==null?Number(rec.total).toFixed(2):'—'}`;
     $('saveMsg').style.display='block'; $('saveMsg').textContent=msg;
-    const sb=$('saveBtn'); sb.disabled=true; sb.textContent='已入库 ✓';
+    const sb=$('saveBtn'); sb.disabled=true; sb.textContent='已保存为未入库草稿（还没入库）';
     const dp=$('donePanel'); if(dp){ $('doneText').textContent=msg+' —— 这张办完了'; dp.style.display='block'; }
     await renderRecords();
     if(dp) dp.scrollIntoView({behavior:'smooth',block:'center'});
-  }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='入库失败：'+(e&&e.message?e.message:e); }
+  }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='保存草稿失败：'+(e&&e.message?e.message:e); }
 });
 $('refreshRecords').addEventListener('click',renderRecords);
-const _exp=$('exportRecords'); if(_exp) _exp.addEventListener('click',async()=>{
-  const all=await idbAll();
-  if(!all.length){ alert('还没有已入库记录可以导出。'); return; }
-  const blob=new Blob([JSON.stringify({app:'costco-price-app',kind:'receipts',version:1,exported_at:new Date().toISOString(),receipts:all},null,2)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='costco-receipts-export.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-});
-$('clearRecords').addEventListener('click',async()=>{ if(confirm('确定要清空全部已入库记录吗？清了就找不回来。')){ await idbClear(); renderRecords(); } });
+$('clearRecords').addEventListener('click',async()=>{ if(confirm('确定要清空全部未入库草稿吗？清了就找不回来。')){ await idbClear(); renderRecords(); } });
 renderRecords();
 
 const _rb=$('retryPaddle');

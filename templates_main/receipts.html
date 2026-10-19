@@ -41,11 +41,6 @@ table.qtable th{background:#005daa;color:#fff} table.qtable th a{color:#fff}
 </tbody></table></div>
 <p class="hint">像 Excel 一样一行一张小票；表格可以左右滑动看全。每一行最前面是删除号 −，不要这张了点它，确认后就删掉。</p>
 {% else %}<p class="big">还没有查到小票。换个条件试试，或者先去录入一张。</p>{% endif %}
-<h2>把手机版记录导入正式库</h2>
-<p class="big">手机测试版里点「⬇ 导出已入库记录（给正式库导入）」下载文件，再在这里选那个文件导入。重复的小票会自动跳过，不会重复入。</p>
-<form method="post" action="/receipts/import-json" enctype="multipart/form-data">
-<label class="upload-btn">📥 选择手机版导出的文件<input type="file" name="receipts_json" accept=".json,application/json" onchange="if(this.files.length)this.form.submit()"></label>
-</form>
 <a class="second-btn" href="/history">🔍 查询已入库商品（按日期 / 名称 / 代码 / 价格）</a>
 <a class="second-btn" href="/receipts/new">← 返回已买小票</a>
 {% endblock %}
