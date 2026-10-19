@@ -253,3 +253,5 @@
 | 64c | 2026-10-19 | JS 回归 | parser/去重不回退 | `test_dedup_js.js` ALL PASS、`test_new_receipt_js.js` PASS 5/5；Flask 代码本轮未改，记录63 的 Flask 回归不重复冒充本轮新测 | 通过 |
 
 > 记录64 推送后复验待补：push 后复查 https://amycai1973mia.github.io/costco-price-app/home.html 与根链接跳转，见下方补记。
+
+> 记录64 推送后复验：commit 67053a3 已 push；约40秒后 https://amycai1973mia.github.io/costco-price-app/home.html 返回 200 且含 goAlerts 与「未入库草稿 0 张」、演示词 0；根链接返回 200 且源码含转到 home.html 的脚本，确认为新版。
