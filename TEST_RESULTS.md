@@ -239,3 +239,4 @@
 | 63c | 2026-10-19 | 入库专项回归不回退 | 未确认不入库、确认入总库、查询可删、防重；待购三项/原价；主流程 | `test_receipts_db.py --ocr` 8项 ALL PASS（含真票1694477/16.99）；`test_wishlist.py` ALL PASS；`test_main_app.py` ALL PASS；`test_dedup_js.js` ALL PASS | 通过 |
 
 测试数据清理：Flask 临时 TEST/TESTHOME 用户及其小票/待购/提醒已清理，测后核查 users 剩1个既有账号，receipts/receipt_items/wishlist/alerts 均为0；手机测试用 /tmp 临时 Chrome 配置（已删除），不留正式草稿；截图为另用临时配置拍的干净首页（0张/0件）。手机 OCR 识别链路本轮未改，以既往真票记录为准。
+> 记录63 推送后复验：commit 8545963 已 push；唯一对外链接 https://amycai1973mia.github.io/costco-price-app/ 返回 200，约 60 秒传播后抓到新版总首页（含 goReceiptsHome/goWishlistHome 与草稿计数行），确认为新版不是旧版缓存。
