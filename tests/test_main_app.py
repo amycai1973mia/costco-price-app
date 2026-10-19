@@ -41,12 +41,13 @@ try:
     assert c.get("/admin").status_code == 403
     # 手工录入小票: 1412124 近期购买(2026-10-08), 1694477 久前购买(2026-08-01) 分两张
     def manual_receipt(client, date_s, code, name, price):
-        r = client.get("/receipts/manual"); rid = r.location.rsplit("/", 1)[-1]
-        return client.post(f"/receipts/confirm/{rid}", data={
+        form = {
             "store_code": "255", "purchase_date": date_s, "subtotal": "", "fees_total": "", "tax": "0", "total": str(price),
             "item_code": [code], "item_name": [name], "item_price": [str(price)], "item_qty": ["1"],
             "item_discount": ["-3.00" if code == "1412124" else "0"], "item_enviro_fee": ["0.10"], "item_deposit": ["0"],
-            "item_is_manual": ["1"]}, follow_redirects=True)
+            "item_is_manual": ["1"]}
+        r = client.post("/receipts/manual", data=form); rid = r.location.rsplit("/", 1)[-1]
+        return client.post(f"/receipts/confirm/{rid}", data=form, follow_redirects=True)
     assert "已入库" in manual_receipt(c, "2026-10-08", "1412124", "QUICK OATS", 11.99).get_data(as_text=True)
     assert "已入库" in manual_receipt(c, "2026-08-01", "1694477", "PEROGIES", 16.99).get_data(as_text=True)
     # 费用/折扣/顺序入库核对

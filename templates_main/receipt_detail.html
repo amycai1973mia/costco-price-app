@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}小票明细 — Costco 助手{% endblock %}{% block body %}
+<style>
+.qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #ccc;border-radius:10px}
+table.qtable{border-collapse:collapse;min-width:720px;width:100%}
+table.qtable th,table.qtable td{border:1px solid #bbb;padding:9px 8px;font-size:17px;text-align:left;white-space:nowrap}
+table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:normal;min-width:150px}
+.fee{color:#b00020}
+</style>
+<h1>🧾 小票明细</h1>
+<p class="big" style="background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px">{{ r.purchase_date or '—' }} · 门店 {{ r.store_code or '?' }} · 共 {{ r.item_count }} 件 · 小计 ${{ '%.2f'|format(r.subtotal or 0) }} · 费用 ${{ '%.2f'|format(r.fees_total or 0) }} · 税 ${{ '%.2f'|format(r.tax or 0) }} · 总计 ${{ '%.2f'|format(r.total or 0) }}{% if r.invoice_no %} · 发票号 {{ r.invoice_no }}{% endif %}</p>
+<div class="qwrap"><table class="qtable">
+<thead><tr><th>代码</th><th>名称</th><th>价格</th><th>折扣</th><th>环保费</th><th>押金</th><th>数量</th></tr></thead>
+<tbody>
+{% for it in items %}
+<tr><td>{{ it.item_code }}</td><td class="name">{{ it.item_name }}{% if it.is_manual %}（手填）{% endif %}{% if it.discount %}<div class="fee">↳ 折扣 {{ it.discount }}</div>{% endif %}{% if it.enviro_fee %}<div class="fee">↳ 环保费 {{ it.enviro_fee }}</div>{% endif %}{% if it.deposit %}<div class="fee">↳ 押金 {{ it.deposit }}</div>{% endif %}</td><td>${{ '%.2f'|format(it.price or 0) }}</td><td>{{ it.discount or 0 }}</td><td>{{ it.enviro_fee or 0 }}</td><td>{{ it.deposit or 0 }}</td><td>{{ it.quantity or 1 }}</td></tr>
+{% else %}<tr><td colspan="7">这张没有商品明细。</td></tr>{% endfor %}
+</tbody></table></div>
+<form method="post" action="/receipts/{{ r.id }}/delete" onsubmit="return confirm('确定删除这张小票吗？里面的商品记录也会一起删掉。')" style="margin-top:14px">
+<button class="second-btn" type="submit" style="color:#b00020;border-color:#b00020;width:100%">− 删除这张小票</button></form>
+<a class="second-btn" href="/receipts">← 返回查询已入库小票</a>
+<a class="second-btn" href="/">↩ 返回主菜单</a>
+{% endblock %}

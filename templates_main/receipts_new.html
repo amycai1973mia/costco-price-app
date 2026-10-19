@@ -1,19 +1,27 @@
-{% extends "base.html" %}{% block body %}
+{% extends "base.html" %}{% block title %}已买小票 — Costco 助手{% endblock %}{% block body %}
 <h1>🧾 已买小票</h1>
-<p class="big">第一行：拍照或者从相册选小票照片识别。长小票可以分 2–3 张，一次选好几张，程序会合在一起、接缝重复自动去掉。</p>
+<p class="big">和待购一样分层：先选录入方式，进下一层再填或核对，核对无误点确认才入库。</p>
+
+<h2>第一行：拍照或选照片识别小票</h2>
+<p class="hint">长小票可以分 2–3 张，一次选好几张。选完先看已选几张，再点开始识别；程序会合在一起、接缝重复尽量自动去掉。识别完会显示「共识别到 X 件，请核对」，进核对页。</p>
 <form method="post" action="/receipts/upload" enctype="multipart/form-data" id="upform">
-<label class="upload-btn" style="background:#0a7a42">📷 拍照（打开相机）<input type="file" name="receipt" accept="image/*" capture="environment" onchange="if(this.files.length)this.form.submit()"></label>
-<label class="upload-btn" style="background:#1565c0">🖼 从相册选（可以一次选多张）<input type="file" name="receipt" accept="image/*" multiple onchange="if(this.files.length)this.form.submit()"></label>
+  <label class="upload-btn" style="background:#0a7a42">📷 拍照（打开相机，现场拍一张）<input type="file" id="fCam" name="receipt" accept="image/*" capture="environment"></label>
+  <label class="upload-btn" style="background:#1565c0">🖼 从相册选（可以一次选多张）<input type="file" id="fAlb" name="receipt" accept="image/*" multiple></label>
+  <p class="big" id="selCount">还没有选照片。</p>
+  <button class="confirm-btn" type="submit" id="startBtn" disabled>开始识别（共 0 张）</button>
 </form>
-<p class="big">第二行：没有照片，或者想自己填一张，点下面手工录入，进去才填。</p>
-<a class="second-btn" href="/receipts/manual">✍️ 手工录入一张小票</a>
-<h2>查询已入库的小票</h2>
-<a class="second-btn" href="/receipts">🧾 看我的小票（已入库的都在这里）</a>
-<a class="second-btn" href="/history">🔍 查询以前买过的商品（按日期 / 名称 / 代码，还能加入待购）</a>
-<h2>把手机版记录导入正式库</h2>
-<p class="big">手机测试版里点「⬇ 导出已入库记录（给正式库导入）」下载文件，再在这里选那个文件导入。重复的小票会自动跳过，不会重复入。</p>
-<form method="post" action="/receipts/import-json" enctype="multipart/form-data">
-<label class="upload-btn">📥 选择手机版导出的文件<input type="file" name="receipts_json" accept=".json,application/json" onchange="if(this.files.length)this.form.submit()"></label>
-</form>
+
+<h2>第二行：手工录入</h2>
+<a class="second-btn" href="/receipts/manual">✍️ 手工录入小票（点进去再填购买日期、门店和每件商品）</a>
+
+<h2>下面：查已经存好的</h2>
+<a class="second-btn" href="/receipts">🔍 查询已入库小票（按日期 / 门店 / 名称 / 代码 / 总计查，不要的可以删除）</a>
+<a class="second-btn" href="/history">🔍 查询已入库商品（按日期 / 名称 / 代码 / 价格查）</a>
 <a class="second-btn" href="/">↩ 返回主菜单</a>
+<script>
+function upd(){const n=(document.getElementById('fCam').files.length||0)+(document.getElementById('fAlb').files.length||0);
+ document.getElementById('selCount').textContent=n?('已选 '+n+' 张照片，检查好再点下面开始识别。'):'还没有选照片。';
+ const b=document.getElementById('startBtn'); b.disabled=!n; b.textContent='开始识别（共 '+n+' 张）';}
+document.getElementById('fCam').addEventListener('change',upd); document.getElementById('fAlb').addEventListener('change',upd);
+</script>
 {% endblock %}

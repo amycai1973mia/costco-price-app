@@ -1,7 +1,51 @@
-{% extends "base.html" %}{% block body %}
-<h1>我的小票</h1>
-{% for r, items in receipts %}
-<div class="record"><b>{{ r.purchase_date }}</b> 门店 {{ r.store_code or '?' }} · 共 {{ r.item_count }} 件 · 总计 ${{ '%.2f'|format(r.total or 0) }}
-<table>{% for it in items %}<tr><td>{{ it.item_code }}</td><td>{{ it.item_name }}{% if it.is_manual %}（手填）{% endif %}{% if it.discount %}<div class="fee">↳ 折扣 {{ it.discount }}</div>{% endif %}{% if it.enviro_fee %}<div class="fee">↳ 环保费 {{ it.enviro_fee }}</div>{% endif %}{% if it.deposit %}<div class="fee">↳ 押金 {{ it.deposit }}</div>{% endif %}</td><td>${{ '%.2f'|format(it.price or 0) }}</td></tr>{% endfor %}</table></div>
-{% else %}<p class="big">还没有入库的小票。先去首页拍一张吧。</p>{% endfor %}
+{% extends "base.html" %}{% block title %}查询已入库小票 — Costco 助手{% endblock %}{% block body %}
+<style>
+.qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #ccc;border-radius:10px}
+table.qtable{border-collapse:collapse;min-width:720px;width:100%}
+table.qtable th,table.qtable td{border:1px solid #bbb;padding:9px 8px;font-size:17px;text-align:left;vertical-align:top;white-space:nowrap}
+table.qtable th{background:#005daa;color:#fff} table.qtable th a{color:#fff}
+.delbtn{background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px;padding:0;cursor:pointer}
+.qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
+.qform label{font-size:18px} .qform input,.qform select{font-size:19px;padding:10px}
+</style>
+<h1>🔍 查询已入库小票</h1>
+<div class="qstatus">查询状态：{% if filtered %}按你填的条件查{% else %}全部显示{% endif %}，共查到 <b>{{ rows|length }}</b> 张{% if qa.sort=='total_asc' %}（按总计从低到高）{% elif qa.sort=='total_desc' %}（按总计从高到低）{% elif qa.sort=='date_asc' %}（按购买日期从旧到新）{% else %}（默认按购买日期从新到旧）{% endif %}。点「看每件」打开一张的明细。</div>
+<form method="get" action="/receipts" class="qform" style="margin-top:14px">
+  <label>购买日期（从）<input name="date_from" type="date" value="{{ qa.date_from }}"></label>
+  <label>购买日期（到）<input name="date_to" type="date" value="{{ qa.date_to }}"></label>
+  <label>门店 <input name="store" inputmode="numeric" value="{{ qa.store }}" placeholder="例如 255，可不填"></label>
+  <label>商品名称 <input name="keyword" value="{{ qa.keyword }}" placeholder="例如 PEROGIES，可不填"></label>
+  <label>商品代码 <input name="code" inputmode="numeric" value="{{ qa.code }}" placeholder="例如 1694477，可不填"></label>
+  <label>总计最低 $ <input name="total_min" inputmode="decimal" value="{{ qa.total_min }}" placeholder="可不填"></label>
+  <label>总计最高 $ <input name="total_max" inputmode="decimal" value="{{ qa.total_max }}" placeholder="可不填"></label>
+  <label>排序 <select name="sort">
+    <option value="date_desc" {% if qa.sort=='date_desc' %}selected{% endif %}>按购买日期从新到旧（默认）</option>
+    <option value="date_asc" {% if qa.sort=='date_asc' %}selected{% endif %}>按购买日期从旧到新</option>
+    <option value="total_asc" {% if qa.sort=='total_asc' %}selected{% endif %}>按总计从低到高</option>
+    <option value="total_desc" {% if qa.sort=='total_desc' %}selected{% endif %}>按总计从高到低</option></select></label>
+  <button class="confirm-btn" type="submit">🔍 查询</button>
+  <a class="second-btn" href="/receipts">清除条件，看全部</a>
+</form>
+{% if rows %}
+<div class="qwrap"><table class="qtable">
+<thead><tr><th>删除</th><th>购买日期</th><th>门店</th><th>件数</th><th>小计</th><th>费用</th><th>税</th><th><a href="?date_from={{ qa.date_from }}&date_to={{ qa.date_to }}&store={{ qa.store }}&keyword={{ qa.keyword }}&code={{ qa.code }}&total_min={{ qa.total_min }}&total_max={{ qa.total_max }}&sort={{ 'total_desc' if qa.sort=='total_asc' else 'total_asc' }}">总计 ↕</a></th><th>明细</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td><form method="post" action="/receipts/{{ r.id }}/delete" onsubmit="return confirm('确定删除这张小票吗？里面的商品记录也会一起删掉。')">{% for k in ['date_from','date_to','store','keyword','code','total_min','total_max','sort'] %}{% if qa[k] %}<input type="hidden" name="{{ k }}" value="{{ qa[k] }}">{% endif %}{% endfor %}<button class="delbtn" type="submit" title="删除这张小票">−</button></form></td>
+  <td>{{ r.purchase_date or '—' }}</td><td>{{ r.store_code or '?' }}</td><td>{{ r.item_count }}</td>
+  <td>${{ '%.2f'|format(r.subtotal or 0) }}</td><td>${{ '%.2f'|format(r.fees_total or 0) }}</td><td>${{ '%.2f'|format(r.tax or 0) }}</td><td>${{ '%.2f'|format(r.total or 0) }}</td>
+  <td><a href="/receipts/{{ r.id }}">看每件 →</a></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<p class="hint">像 Excel 一样一行一张小票；表格可以左右滑动看全。每一行最前面是删除号 −，不要这张了点它，确认后就删掉。</p>
+{% else %}<p class="big">还没有查到小票。换个条件试试，或者先去录入一张。</p>{% endif %}
+<h2>把手机版记录导入正式库</h2>
+<p class="big">手机测试版里点「⬇ 导出已入库记录（给正式库导入）」下载文件，再在这里选那个文件导入。重复的小票会自动跳过，不会重复入。</p>
+<form method="post" action="/receipts/import-json" enctype="multipart/form-data">
+<label class="upload-btn">📥 选择手机版导出的文件<input type="file" name="receipts_json" accept=".json,application/json" onchange="if(this.files.length)this.form.submit()"></label>
+</form>
+<a class="second-btn" href="/history">🔍 查询已入库商品（按日期 / 名称 / 代码 / 价格）</a>
+<a class="second-btn" href="/receipts/new">← 返回已买小票</a>
 {% endblock %}

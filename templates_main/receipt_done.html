@@ -3,6 +3,6 @@
 <p class="big" style="background:#e8f6e8;padding:16px;border-radius:10px">已入库 ✓ 共 {{ r.item_count }} 件，总计 ${{ '%.2f'|format(r.total or 0) }}（{{ r.purchase_date }} · 门店 {{ r.store_code or '?' }}）</p>
 <p class="big">这张办完了。在「看我的小票」和「查询以前买过的商品」里都能查到它。</p>
 <a class="confirm-btn" href="/" style="display:block;text-align:center;text-decoration:none">↩ 返回主菜单</a>
-<a class="second-btn" href="/receipts">🧾 看我的小票</a>
+<a class="second-btn" href="/receipts">🔍 查询已入库记录</a>
 <a class="second-btn" href="/history">🔍 查询以前买过的商品</a>
 {% endblock %}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% block body %}
 <h1>请核对小票</h1>
+<p class="big" style="background:#fff8db;border:2px solid #e67700;border-radius:12px;padding:14px">共识别到 {{ d['items']|length }} 件，请核对。核对正确后点最下面的「确认无误，入库」才算入库，没点不会存。</p>
 {% if dup %}<p class="big" style="background:#fff3cd;padding:14px;border-radius:10px">⚠ 这张小票可能已经入过库了：{{ dup.purchase_date }} · 门店 {{ dup.store_code or '?' }} · 共 {{ dup.item_count }} 件 · 总计 ${{ '%.2f'|format(dup.total or 0) }}。如果确实是同一张，请点「返回主菜单」不要重复入；如果确实是两张一样的，请点下面红色的「确实是另一张，照样入库」。</p>{% endif %}
 {% if d.error %}<p class="warn-tag">识别出了点问题（{{ d.error }}），请照小票手工填写下面内容。</p>{% endif %}
 <p class="big">黄色/不确定的地方请重点看，错了直接点格子改。日期只打数字就行，会自动变成 2026/10/03。改任何数字，下面的录入总计会马上跟着变。</p>
@@ -36,8 +37,8 @@
 <p class="big" id="warnMsg" style="display:none;background:#fff3cd;padding:14px;border-radius:10px"></p>
 {% if dup %}<input type="hidden" name="confirm_duplicate" value="1"><button class="confirm-btn" type="submit" style="background:#b00020">确实是另一张，照样入库</button>
 {% else %}<button class="confirm-btn" type="submit" id="saveBtn">✅ 确认无误，入库</button>{% endif %}
-<a class="second-btn" href="/" style="color:#b00020;border-color:#b00020">识别太差，重新再来（放弃这次）</a>
-<a class="second-btn" href="/">↩ 返回主菜单</a>
+<a class="second-btn" href="/receipts/confirm/{{ rid }}/discard" style="color:#b00020;border-color:#b00020">识别太差，重新再来（放弃这次，清空本次）</a>
+<a class="second-btn" href="/receipts/confirm/{{ rid }}/discard">↩ 返回主菜单（放弃这次，清空本次）</a>
 </form>
 <template id="rowtpl"><div class="item" style="background:#eaf2ff"><p>手填行</p>
 <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">

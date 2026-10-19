@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% block title %}手工录入小票 — Costco 助手{% endblock %}{% block body %}
+<h1>✍️ 手工录入小票</h1>
+<p class="big">在这一层填：购买日期、门店，还有每件的代码 / 名称 / 价格。填完点「填好了，去核对」，会先进核对页；核对页点「确认无误，入库」才写进数据库，这里不直接入库。</p>
+<form method="post" action="/receipts/manual" id="mform">
+<label>门店代码 <input name="store_code" inputmode="numeric" placeholder="例如 255"></label>
+<label>购买日期 <input name="purchase_date" id="f-date" value="{{ today|replace('-','/') }}" placeholder="只打数字，如 20261003" inputmode="numeric"></label>
+<label>发票号（小票上有就填，没有可留空，防重复用）<input name="invoice_no" inputmode="numeric"></label>
+<label>商品小计（可留空，核对页程序自动算）<input name="subtotal" inputmode="decimal"></label>
+<label>费用合计 环保费+押金（可留空自动算）<input name="fees_total" inputmode="decimal"></label>
+<label>税 TAX <input name="tax" inputmode="decimal"></label>
+<label>小票总计 TOTAL <input name="total" inputmode="decimal"></label>
+<h2>商品（按小票顺序，折扣和环保费/押金填在每件下面）</h2>
+<div id="items"></div>
+<button type="button" class="second-btn" onclick="addRow()">＋ 加一行商品</button>
+<button class="confirm-btn" type="submit">填好了，去核对 →</button>
+</form>
+<a class="second-btn" href="/receipts/new">← 返回已买小票（不录入）</a>
+<template id="rowtpl"><div class="item" style="background:#eaf2ff"><p>手填行 <button type="button" class="delx" style="float:right;font-size:20px;width:36px;height:36px">✕</button></p>
+<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+<label style="flex:0 0 110px">代码 <input name="item_code" inputmode="numeric"></label>
+<label style="flex:1 1 160px">名称 <input name="item_name"></label>
+<label style="flex:0 0 100px">价格 <input name="item_price" inputmode="decimal"></label>
+<label style="flex:0 0 70px">数量 <input name="item_qty" value="1" inputmode="numeric"></label></div>
+<div class="fee">↳ 折扣（没有就留 0）<input name="item_discount" value="0" style="width:140px" inputmode="decimal"></div>
+<div class="fee">↳ 环保费 <input name="item_enviro_fee" value="0" style="width:120px" inputmode="decimal"> 押金 <input name="item_deposit" value="0" style="width:120px" inputmode="decimal"></div>
+</div></template>
+<script>
+function bindDel(scope){scope.querySelectorAll('.delx').forEach(b=>b.addEventListener('click',()=>b.closest('.item').remove()));}
+function addRow(){let t=document.getElementById('rowtpl').content.cloneNode(true);document.getElementById('items').appendChild(t);bindDel(document.getElementById('items').lastElementChild);}
+addRow();
+let df=document.getElementById('f-date');
+df.addEventListener('input',()=>{let v=df.value.replace(/\D/g,'').slice(0,8);let out=v;if(v.length>4)out=v.slice(0,4)+'/'+v.slice(4);if(v.length>6)out=v.slice(0,4)+'/'+v.slice(4,6)+'/'+v.slice(6);df.value=out;});
+</script>
+{% endblock %}

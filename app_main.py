@@ -201,11 +201,47 @@ def receipt_upload():
 @app.route("/receipts/manual")
 @login_required
 def receipt_manual():
+    # 手工录入是下一层：先在本页填，提交后只生成待核对内容、进核对页，未点核对页入库不写库（与待购分层一致）
+    return render_template("receipt_manual.html", today=date.today().isoformat())
+
+@app.route("/receipts/manual", methods=["POST"])
+@login_required
+def receipt_manual_submit():
+    codes = request.form.getlist("item_code"); names = request.form.getlist("item_name")
+    prices = request.form.getlist("item_price"); qtys = request.form.getlist("item_qty")
+    discs = request.form.getlist("item_discount"); fees_e = request.form.getlist("item_enviro_fee")
+    fees_d = request.form.getlist("item_deposit")
+    items = []
+    for i, code in enumerate(codes):
+        name = names[i].strip() if i < len(names) else ""
+        if not code.strip() and not name: continue
+        items.append(dict(item_code=code.strip(), item_name=name, price=fnum(prices[i]) if i < len(prices) else 0.0,
+                          discount=fnum(discs[i]) if i < len(discs) else 0.0,
+                          enviro_fee=fnum(fees_e[i]) if i < len(fees_e) else 0.0,
+                          deposit=fnum(fees_d[i]) if i < len(fees_d) else 0.0,
+                          quantity=int(fnum(qtys[i], 1)) if i < len(qtys) else 1, is_manual=1, line_order=len(items)))
     rid = "manual" + uuid.uuid4().hex[:8]
-    data = {"receipt_key": rid, "image_name": "", "store_code": "", "purchase_date": date.today().isoformat(),
-            "subtotal": "", "fees_total": "", "tax": "", "total": "", "invoice_no": "", "items": [], "owner": session["user_id"], "manual": True}
+    data = {"receipt_key": rid, "image_name": "", "manual": True, "owner": session["user_id"],
+            "store_code": request.form.get("store_code", "").strip(),
+            "purchase_date": norm_date(request.form.get("purchase_date", "")) or request.form.get("purchase_date", ""),
+            "invoice_no": request.form.get("invoice_no", "").strip(),
+            "subtotal": request.form.get("subtotal", "").strip(), "fees_total": request.form.get("fees_total", "").strip(),
+            "tax": request.form.get("tax", "").strip(), "total": request.form.get("total", "").strip(), "items": items}
     (PENDING / f"{rid}.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     return redirect(url_for("receipt_confirm", rid=rid))
+
+@app.route("/receipts/confirm/<rid>/discard")
+@login_required
+def receipt_discard(rid):
+    # 重新再来/放弃本次：删待确认内容（照片登记一并清），已入库记录不动
+    try:
+        data = load_pending(rid)
+        img = data.get("image_name") or ""
+        if img: (UPLOADS / img).unlink(missing_ok=True)
+    except Exception: pass
+    (PENDING / f"{rid}.json").unlink(missing_ok=True)
+    flash("已放弃这次，本次照片和核对内容已清空。已入库的记录不会动。")
+    return redirect(url_for("home"))
 
 def load_pending(rid):
     p = PENDING / f"{rid}.json"
@@ -345,10 +381,67 @@ def receipt_import_json():
 @app.route("/receipts")
 @login_required
 def receipts_list():
+    uid = session["user_id"]
+    qa = dict(date_from=request.args.get("date_from", ""), date_to=request.args.get("date_to", ""),
+              store=request.args.get("store", "").strip(), keyword=request.args.get("keyword", "").strip(),
+              code=request.args.get("code", "").strip(), total_min=request.args.get("total_min", "").strip(),
+              total_max=request.args.get("total_max", "").strip(), sort=request.args.get("sort", "date_desc"))
+    where = ["r.user_id=?"]; args = [uid]
+    if qa["date_from"]: where.append("r.purchase_date>=?"); args.append(norm_date(qa["date_from"]))
+    if qa["date_to"]: where.append("r.purchase_date<=?"); args.append(norm_date(qa["date_to"]))
+    if qa["store"]: where.append("r.store_code LIKE ?"); args.append(f"%{qa['store']}%")
+    if qa["keyword"]: where.append("EXISTS (SELECT 1 FROM receipt_items i WHERE i.receipt_id=r.id AND i.item_name LIKE ?)"); args.append(f"%{qa['keyword']}%")
+    if qa["code"]: where.append("EXISTS (SELECT 1 FROM receipt_items i WHERE i.receipt_id=r.id AND i.item_code LIKE ?)"); args.append(f"%{qa['code']}%")
+    if qa["total_min"]:
+        try: where.append("r.total>=?"); args.append(float(qa["total_min"]))
+        except ValueError: pass
+    if qa["total_max"]:
+        try: where.append("r.total<=?"); args.append(float(qa["total_max"]))
+        except ValueError: pass
+    order = {"date_desc": "r.purchase_date DESC, r.id DESC", "date_asc": "r.purchase_date ASC, r.id ASC",
+             "total_asc": "r.total ASC, r.id DESC", "total_desc": "r.total DESC, r.id DESC"}.get(qa["sort"], "r.purchase_date DESC, r.id DESC")
     con = db()
-    rows = con.execute("SELECT * FROM receipts WHERE user_id=? ORDER BY purchase_date DESC, id DESC", (session["user_id"],)).fetchall()
-    out = [(r, con.execute("SELECT * FROM receipt_items WHERE receipt_id=? ORDER BY line_order,id", (r["id"],)).fetchall()) for r in rows]
-    con.close(); return render_template("receipts.html", receipts=out)
+    rows = con.execute(f"SELECT r.* FROM receipts r WHERE {' AND '.join(where)} ORDER BY {order}", args).fetchall()
+    con.close()
+    filtered = any(qa[k] for k in ("date_from","date_to","store","keyword","code","total_min","total_max"))
+    return render_template("receipts.html", rows=rows, qa=qa, filtered=filtered)
+
+@app.route("/receipts/<int:receipt_id>")
+@login_required
+def receipt_detail(receipt_id):
+    con = db()
+    r = con.execute("SELECT * FROM receipts WHERE id=? AND user_id=?", (receipt_id, session["user_id"])).fetchone()
+    if r is None: con.close(); abort(404)
+    items = con.execute("SELECT * FROM receipt_items WHERE receipt_id=? ORDER BY line_order,id", (receipt_id,)).fetchall()
+    con.close(); return render_template("receipt_detail.html", r=r, items=items)
+
+@app.route("/receipts/<int:receipt_id>/delete", methods=["POST"])
+@login_required
+def receipt_delete(receipt_id):
+    con = db()
+    con.execute("DELETE FROM receipt_items WHERE receipt_id IN (SELECT id FROM receipts WHERE id=? AND user_id=?)", (receipt_id, session["user_id"]))
+    cur = con.execute("DELETE FROM receipts WHERE id=? AND user_id=?", (receipt_id, session["user_id"]))
+    con.commit(); con.close()
+    flash("已删除这张小票。" if cur.rowcount else "没有找到这张小票。")
+    keep = {k: v for k, v in request.form.items() if k in ("date_from","date_to","store","keyword","code","total_min","total_max","sort") and v}
+    return redirect(url_for("receipts_list", **keep))
+
+@app.route("/receipts/item/<int:item_id>/delete", methods=["POST"])
+@login_required
+def receipt_item_delete(item_id):
+    con = db()
+    row = con.execute("""SELECT i.receipt_id FROM receipt_items i JOIN receipts r ON r.id=i.receipt_id
+                         WHERE i.id=? AND r.user_id=?""", (item_id, session["user_id"])).fetchone()
+    if row:
+        rid = row["receipt_id"]
+        con.execute("DELETE FROM receipt_items WHERE id=?", (item_id,))
+        cnt = con.execute("SELECT COUNT(*) c FROM receipt_items WHERE receipt_id=?", (rid,)).fetchone()["c"]
+        if cnt == 0: con.execute("DELETE FROM receipts WHERE id=?", (rid,))
+        else: con.execute("UPDATE receipts SET item_count=? WHERE id=?", (cnt, rid))
+        con.commit(); flash("已删除这一件商品记录。")
+    con.close()
+    keep = {k: v for k, v in request.form.items() if k in ("date_from","date_to","keyword","code","price_min","price_max","sort") and v}
+    return redirect(url_for("history", **keep))
 
 @app.route("/uploads_main/<name>")
 @login_required
@@ -362,14 +455,23 @@ def history():
     uid = session["user_id"]
     df, dt, kw, code = (request.args.get("date_from", ""), request.args.get("date_to", ""),
                         request.args.get("keyword", "").strip(), request.args.get("code", "").strip())
+    pmin, pmax, sort = (request.args.get("price_min", "").strip(), request.args.get("price_max", "").strip(), request.args.get("sort", "date_desc"))
     where = ["r.user_id=?"]; args = [uid]
     if df: where.append("r.purchase_date>=?"); args.append(norm_date(df))
     if dt: where.append("r.purchase_date<=?"); args.append(norm_date(dt))
     if kw: where.append("i.item_name LIKE ?"); args.append(f"%{kw}%")
-    if code: where.append("i.item_code=?"); args.append(code)
+    if code: where.append("i.item_code LIKE ?"); args.append(f"%{code}%")
+    if pmin:
+        try: where.append("i.price>=?"); args.append(float(pmin))
+        except ValueError: pass
+    if pmax:
+        try: where.append("i.price<=?"); args.append(float(pmax))
+        except ValueError: pass
+    order = {"date_desc": "r.purchase_date DESC, r.id DESC, i.line_order", "date_asc": "r.purchase_date ASC, r.id ASC, i.line_order",
+             "price_asc": "i.price ASC, r.purchase_date DESC", "price_desc": "i.price DESC, r.purchase_date DESC"}.get(sort, "r.purchase_date DESC, r.id DESC, i.line_order")
     con = db()
     rows = con.execute(f"""SELECT r.purchase_date,r.store_code,i.* FROM receipt_items i JOIN receipts r ON r.id=i.receipt_id
-                           WHERE {' AND '.join(where)} ORDER BY r.purchase_date DESC, i.line_order""", args).fetchall()
+                           WHERE {' AND '.join(where)} ORDER BY {order}""", args).fetchall()
     # 汇总: 每个商品买过几次/上次价格/上次日期（在当前筛选结果基础上）
     agg = {}
     for r in rows:
@@ -378,7 +480,9 @@ def history():
         if r["purchase_date"] and r["purchase_date"] >= a["last_date"]: a["last_date"] = r["purchase_date"]; a["last_price"] = r["price"]
     summary = [{"item_code": k[0], "item_name": k[1], **v} for k, v in agg.items()]
     con.close()
-    return render_template("history.html", rows=rows, summary=summary, q=dict(date_from=df, date_to=dt, keyword=kw, code=code), searched=bool(request.args))
+    qa = dict(date_from=df, date_to=dt, keyword=kw, code=code, price_min=pmin, price_max=pmax, sort=sort)
+    return render_template("history.html", rows=rows, summary=summary, q=qa, qa=qa, searched=bool(request.args),
+                           filtered=bool(df or dt or kw or code or pmin or pmax))
 
 # ---------------- 待购清单 ----------------
 # 待购只记三项：商品代码 / 商品名称 / 项目价格，外加系统生成的录入日期与来源。

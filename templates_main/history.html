@@ -1,15 +1,46 @@
-{% extends "base.html" %}{% block body %}
-<h1>查询以前买过的商品</h1>
-<form method="get">
-<label>开始日期 <input name="date_from" type="date" value="{{ q.date_from }}"></label>
-<label>结束日期 <input name="date_to" type="date" value="{{ q.date_to }}"></label>
-<label>商品名称关键词 <input name="keyword" value="{{ q.keyword }}" placeholder="例如 BOUNTY"></label>
-<label>商品代码 <input name="code" value="{{ q.code }}" inputmode="numeric" placeholder="例如 1412124"></label>
-<button class="confirm-btn" type="submit">🔍 查询</button></form>
-{% if summary %}<h2>汇总（买过几次 / 上次价格）</h2><table><tr><th>代码</th><th>名称</th><th>买过几次</th><th>上次日期</th><th>上次价格</th><th></th></tr>
-{% for s in summary %}<tr><td>{{ s.item_code }}</td><td>{{ s.item_name }}</td><td>{{ s.count }}</td><td>{{ s.last_date }}</td><td>${{ '%.2f'|format(s.last_price or 0) }}</td>
-<td><form method="post" action="/wishlist/add"><input type="hidden" name="item_code" value="{{ s.item_code }}"><input type="hidden" name="item_name" value="{{ s.item_name }}"><input type="hidden" name="item_price" value="{{ s.last_price or '' }}"><input type="hidden" name="source" value="history"><button type="submit">加入待购</button></form></td></tr>{% endfor %}</table>{% endif %}
-{% if rows %}<h2>明细</h2><table><tr><th>日期</th><th>门店</th><th>代码</th><th>名称</th><th>价格</th></tr>
-{% for r in rows %}<tr><td>{{ r.purchase_date }}</td><td>{{ r.store_code }}</td><td>{{ r.item_code }}</td><td>{{ r.item_name }}</td><td>${{ '%.2f'|format(r.price or 0) }}</td></tr>{% endfor %}</table>
+{% extends "base.html" %}{% block title %}查询已入库商品 — Costco 助手{% endblock %}{% block body %}
+<style>
+.qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #ccc;border-radius:10px}
+table.qtable{border-collapse:collapse;min-width:680px;width:100%}
+table.qtable th,table.qtable td{border:1px solid #bbb;padding:9px 8px;font-size:17px;text-align:left;vertical-align:top;white-space:nowrap}
+table.qtable th{background:#005daa;color:#fff} table.qtable th a{color:#fff}
+table.qtable td.name{white-space:normal;min-width:150px}
+.delbtn{background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px;padding:0;cursor:pointer}
+.qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
+.qform label{font-size:18px} .qform input,.qform select{font-size:19px;padding:10px}
+</style>
+<h1>🔍 查询已入库商品</h1>
+<div class="qstatus">查询状态：{% if filtered %}按你填的条件查{% else %}全部显示{% endif %}，共查到 <b>{{ rows|length }}</b> 件{% if qa.sort=='price_asc' %}（按价格从低到高）{% elif qa.sort=='price_desc' %}（按价格从高到低）{% elif qa.sort=='date_asc' %}（按购买日期从旧到新）{% else %}（默认按购买日期从新到旧）{% endif %}。点「价格」表头可以按价格排序。</div>
+<form method="get" action="/history" class="qform" style="margin-top:14px">
+<label>购买日期（从）<input name="date_from" type="date" value="{{ qa.date_from }}"></label>
+<label>购买日期（到）<input name="date_to" type="date" value="{{ qa.date_to }}"></label>
+<label>商品名称 <input name="keyword" value="{{ qa.keyword }}" placeholder="例如 PEROGIES"></label>
+<label>商品代码 <input name="code" inputmode="numeric" value="{{ qa.code }}" placeholder="例如 1694477"></label>
+<label>价格最低 $ <input name="price_min" inputmode="decimal" value="{{ qa.price_min }}" placeholder="可不填"></label>
+<label>价格最高 $ <input name="price_max" inputmode="decimal" value="{{ qa.price_max }}" placeholder="可不填"></label>
+<label>排序 <select name="sort">
+<option value="date_desc" {% if qa.sort=='date_desc' %}selected{% endif %}>按购买日期从新到旧（默认）</option>
+<option value="date_asc" {% if qa.sort=='date_asc' %}selected{% endif %}>按购买日期从旧到新</option>
+<option value="price_asc" {% if qa.sort=='price_asc' %}selected{% endif %}>按价格从低到高</option>
+<option value="price_desc" {% if qa.sort=='price_desc' %}selected{% endif %}>按价格从高到低</option></select></label>
+<button class="confirm-btn" type="submit">🔍 查询</button>
+<a class="second-btn" href="/history">清除条件，看全部</a>
+</form>
+{% if summary %}<h2>汇总（买过几次 / 上次价格）</h2>
+<div class="qwrap"><table class="qtable"><thead><tr><th>代码</th><th>名称</th><th>买过几次</th><th>上次日期</th><th>上次价格</th><th></th></tr></thead><tbody>
+{% for s in summary %}<tr><td>{{ s.item_code }}</td><td class="name">{{ s.item_name }}</td><td>{{ s.count }}</td><td>{{ s.last_date }}</td><td>${{ '%.2f'|format(s.last_price or 0) }}</td>
+<td><form method="post" action="/wishlist/add"><input type="hidden" name="item_code" value="{{ s.item_code }}"><input type="hidden" name="item_name" value="{{ s.item_name }}"><input type="hidden" name="item_price" value="{{ s.last_price or '' }}"><input type="hidden" name="source" value="history"><button type="submit">加入待购</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if rows %}<h2>明细</h2>
+<div class="qwrap"><table class="qtable">
+<thead><tr><th>删除</th><th>购买日期</th><th>门店</th><th>代码</th><th>名称</th><th><a href="?date_from={{ qa.date_from }}&date_to={{ qa.date_to }}&keyword={{ qa.keyword }}&code={{ qa.code }}&price_min={{ qa.price_min }}&price_max={{ qa.price_max }}&sort={{ 'price_desc' if qa.sort=='price_asc' else 'price_asc' }}">价格 ↕</a></th></tr></thead>
+<tbody>
+{% for r in rows %}<tr>
+<td><form method="post" action="/receipts/item/{{ r.id }}/delete" onsubmit="return confirm('确定删除这一件商品记录吗？')">{% for k in ['date_from','date_to','keyword','code','price_min','price_max','sort'] %}{% if qa[k] %}<input type="hidden" name="{{ k }}" value="{{ qa[k] }}">{% endif %}{% endfor %}<button class="delbtn" type="submit" title="删除这一件">−</button></form></td>
+<td>{{ r.purchase_date }}</td><td>{{ r.store_code }}</td><td>{{ r.item_code }}</td><td class="name">{{ r.item_name }}{% if r.discount %}<div style="color:#b00020">↳ 折扣 {{ r.discount }}</div>{% endif %}{% if r.enviro_fee %}<div style="color:#b00020">↳ 环保费 {{ r.enviro_fee }}</div>{% endif %}{% if r.deposit %}<div style="color:#b00020">↳ 押金 {{ r.deposit }}</div>{% endif %}</td><td>${{ '%.2f'|format(r.price or 0) }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="hint">像 Excel 一样一行一件；每一行最前面是删除号 −，点它确认后删这一件。</p>
 {% elif searched %}<p class="big">没有查到，换个关键词试试。</p>{% endif %}
+<a class="second-btn" href="/receipts">🔍 查询已入库小票（一行一张）</a>
+<a class="second-btn" href="/">↩ 返回主菜单</a>
 {% endblock %}
