@@ -1,16 +1,50 @@
 {% extends "base.html" %}{% block body %}
+<style>
+.qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #ccc;border-radius:10px}
+table.qtable{border-collapse:collapse;min-width:640px;width:100%}
+table.qtable th,table.qtable td{border:1px solid #bbb;padding:9px 8px;font-size:17px;text-align:left;vertical-align:top;white-space:nowrap}
+table.qtable th{background:#005daa;color:#fff}
+table.qtable th a{color:#fff}
+table.qtable td.name{white-space:normal;min-width:150px}
+.delbtn{background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px;padding:0;cursor:pointer}
+.qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
+.qform label{font-size:18px}
+.qform input,.qform select{font-size:19px;padding:10px}
+</style>
 <h1>🔍 查询已入库待购产品</h1>
-<form method="get" action="/wishlist/query">
-  <label>按名称或代码查 <input name="q" value="{{ q }}" placeholder="输名称或代码，不输就是全部"></label>
+<div class="qstatus">查询状态：{% if filtered %}按你填的条件查{% else %}全部显示{% endif %}，共查到 <b>{{ rows|length }}</b> 条{% if qa.sort=='price_asc' %}（按价格从低到高）{% elif qa.sort=='price_desc' %}（按价格从高到低）{% else %}（默认按录入日期从新到旧）{% endif %}。点「价格」表头可以按价格排序。</div>
+<form method="get" action="/wishlist/query" class="qform" style="margin-top:14px">
+  <label>商品名称 <input name="name" value="{{ qa.name }}" placeholder="例如 OATS"></label>
+  <label>商品代码 <input name="code" inputmode="numeric" value="{{ qa.code }}" placeholder="例如 1412124"></label>
+  <label>录入日期（从）<input name="date_from" type="date" value="{{ qa.date_from }}"></label>
+  <label>录入日期（到）<input name="date_to" type="date" value="{{ qa.date_to }}"></label>
+  <label>价格最低 $ <input name="price_min" inputmode="decimal" value="{{ qa.price_min }}" placeholder="可不填"></label>
+  <label>价格最高 $ <input name="price_max" inputmode="decimal" value="{{ qa.price_max }}" placeholder="可不填"></label>
+  <label>排序
+    <select name="sort">
+      <option value="date_desc" {% if qa.sort=='date_desc' %}selected{% endif %}>按录入日期从新到旧（默认）</option>
+      <option value="price_asc" {% if qa.sort=='price_asc' %}selected{% endif %}>按价格从低到高</option>
+      <option value="price_desc" {% if qa.sort=='price_desc' %}selected{% endif %}>按价格从高到低</option>
+    </select></label>
   <button class="confirm-btn" type="submit">🔍 查询</button>
+  <a class="second-btn" href="/wishlist/query">清除条件，看全部</a>
 </form>
+{% if rows %}
+<div class="qwrap"><table class="qtable">
+<thead><tr><th>删除</th><th>商品代码</th><th>商品名称</th><th><a href="?name={{ qa.name }}&code={{ qa.code }}&date_from={{ qa.date_from }}&date_to={{ qa.date_to }}&price_min={{ qa.price_min }}&price_max={{ qa.price_max }}&sort={{ 'price_desc' if qa.sort=='price_asc' else 'price_asc' }}">价格 ↕</a></th><th>录入日期</th><th>来源</th></tr></thead>
+<tbody>
 {% for r in rows %}
-<div class="record">
-  <b>{{ r.item_name or '（无名称）' }}</b>（{{ r.item_code or '无代码' }}）<br>
-  加入时间：{{ r.created_at }} · 来源：{{ {'manual':'手工','history':'从已购记录','photo':'拍照'}[r.source] }}
-  {% if r.note %}<br>备注：{{ r.note }}{% endif %}
-  <form method="post" action="/wishlist/{{ r.id }}/delete" onsubmit="return confirm('确定从待购清单删除这件吗？')"><button type="submit">🗑 删除（不要了）</button></form>
-</div>
-{% else %}<p class="big">还没有查到待购商品。</p>{% endfor %}
-<a class="second-btn" href="/wishlist">← 返回待购清单</a>
+<tr>
+  <td><form method="post" action="/wishlist/{{ r.id }}/delete" onsubmit="return confirm('确定从待购清单删除这一条吗？')">{% for k in ['q','name','code','date_from','date_to','price_min','price_max','sort'] %}{% if qa[k] %}<input type="hidden" name="{{ k }}" value="{{ qa[k] }}">{% endif %}{% endfor %}<button class="delbtn" type="submit" title="删除这一条">−</button></form></td>
+  <td>{{ r.item_code or '无代码' }}</td>
+  <td class="name">{{ r.item_name or '（无名称）' }}{% if r.clean_note %}<br><small>备注：{{ r.clean_note }}</small>{% endif %}</td>
+  <td>{{ r.price_display }}</td>
+  <td>{{ r.entry_date }}</td>
+  <td>{{ r.source_label }}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<p class="hint">表格可以左右滑动看全；每一行最前面是删除号 −，不要这一条了点它，确认后就删掉。</p>
+{% else %}<p class="big">还没有查到待购商品。换个条件试试，或者先去加入一件。</p>{% endif %}
+<a class="second-btn" href="/wishlist">← 返回待购主菜单</a>
 {% endblock %}

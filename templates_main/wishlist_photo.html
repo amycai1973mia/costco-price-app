@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block body %}
 <h1>核对识别到的商品</h1>
-<p class="big">勾选要加入的，可以改代码、名称、价格；不要的点小 ✕ 删掉这一行。点最下面的「加入待购清单」才会入库，不点就不存。</p>
+{% if items %}<p class="big" style="background:#fff8db;border:2px solid #e67700;border-radius:12px;padding:14px">共识别到 {{ items|length }} 件，请核对{% if photo_count %}（这次共 {{ photo_count }} 张照片）{% endif %}。只核对三样：商品代码、商品名称、目前的价格，改对了再点最下面的按钮。</p>{% endif %}
+<p class="hint">不要的点小 ✕ 删掉这一行，也可以手工加一行。没点「确认录入，加入数据库」之前，不会入库。</p>
 <form method="post" action="/wishlist/photo/confirm-add" id="wishForm">
 <div id="rows">
 {% for it in items %}
@@ -9,32 +10,29 @@
   <button type="button" class="row-del" title="删掉这一行" style="float:right;background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px">✕</button>
   <label>商品代码 <input name="item_code" inputmode="numeric" value="{{ it.item_code }}"></label>
   <label>商品名称 <input name="item_name" value="{{ it.item_name }}"></label>
-  <label>价格 $ <input name="item_price" inputmode="decimal" value="{{ it.price if it.price is not none else '' }}"></label>
-  <label>备注 <input name="item_note" value=""></label>
+  <label>目前价格 $ <input name="item_price" inputmode="decimal" value="{{ it.price if it.price is not none else '' }}"></label>
+  <label style="font-weight:400;font-size:17px">备注（选填）<input name="item_note" value=""></label>
 </div>
 {% else %}<p class="big">没识别出商品，可以点下面「＋ 手工加一行」，或回去用手工录入。</p>{% endfor %}
 </div>
 <button type="button" class="second-btn" id="addRow">＋ 手工加一行</button>
-<button class="confirm-btn" type="submit">＋ 加入待购清单（点这里才入库）</button>
+<button class="confirm-btn" type="submit">确认录入，加入数据库</button>
 </form>
-<a class="second-btn" href="/wishlist">← 返回待购清单（不加入）</a>
+<a class="second-btn" href="/wishlist">← 返回待购主菜单（不加入）</a>
 <script>
-let nextIdx = document.querySelectorAll('.wish-row').length;
-function renumber(){ /* selected 的 value 以当前行序为准，提交前重排 */
-  document.querySelectorAll('.wish-row').forEach((row,i)=>{ const c=row.querySelector('input[name=selected]'); if(c) c.value=i; });
-}
+function renumber(){ document.querySelectorAll('.wish-row').forEach((row,i)=>{ const c=row.querySelector('input[name=selected]'); if(c) c.value=i; }); }
 document.getElementById('wishForm').addEventListener('submit', renumber);
-document.querySelectorAll('.row-del').forEach(b=>b.addEventListener('click',()=>{ b.closest('.wish-row').remove(); renumber(); }));
+function bindDel(b){ b.addEventListener('click',()=>{ b.closest('.wish-row').remove(); renumber(); }); }
+document.querySelectorAll('.row-del').forEach(bindDel);
 document.getElementById('addRow').addEventListener('click',()=>{
   const d=document.createElement('div'); d.className='item wish-row';
   d.innerHTML='<label style="font-weight:700"><input type="checkbox" name="selected" checked style="width:auto;transform:scale(1.5)"> 要加入</label>'
     +'<button type="button" class="row-del" style="float:right;background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px">✕</button>'
     +'<label>商品代码 <input name="item_code" inputmode="numeric" value=""></label>'
     +'<label>商品名称 <input name="item_name" value=""></label>'
-    +'<label>价格 $ <input name="item_price" inputmode="decimal" value=""></label>'
-    +'<label>备注 <input name="item_note" value=""></label>';
-  d.querySelector('.row-del').addEventListener('click',()=>{ d.remove(); renumber(); });
-  document.getElementById('rows').appendChild(d); renumber();
+    +'<label>目前价格 $ <input name="item_price" inputmode="decimal" value=""></label>'
+    +'<label style="font-weight:400;font-size:17px">备注（选填）<input name="item_note" value=""></label>';
+  bindDel(d.querySelector('.row-del')); document.getElementById('rows').appendChild(d); renumber();
 });
 </script>
 {% endblock %}

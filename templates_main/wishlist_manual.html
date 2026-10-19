@@ -1,14 +1,13 @@
 {% extends "base.html" %}{% block body %}
 <h1>✍️ 手工录入待购商品</h1>
-<p class="big">填好后点下面的大按钮，才会加入待购清单。</p>
+<p class="big">只填三样：商品代码、商品名称、目前价格。填好点下面的大按钮，才会加入待购清单。</p>
 <form method="post" action="/wishlist/add">
   <input type="hidden" name="source" value="manual">
   <label>商品代码 <input name="item_code" inputmode="numeric" placeholder="例如 1412124"></label>
   <label>商品名称 <input name="item_name" required placeholder="例如 QUICK OATS"></label>
-  <label>价格 $（参考价，可不填，不是期望价格）<input name="item_price" inputmode="decimal" placeholder="例如 11.99"></label>
-  <label>数量 <input name="item_quantity" inputmode="numeric" placeholder="例如 1"></label>
-  <label>备注 <input name="note" placeholder="可不填"></label>
-  <button class="confirm-btn" type="submit">＋ 加入待购清单</button>
+  <label>目前价格 / 参考价格 $（商品牌上现在的价格，可不填；不是期望价格，不设门槛）<input name="item_price" inputmode="decimal" placeholder="例如 11.99"></label>
+  <label style="font-weight:400;font-size:17px">备注（选填，可不填）<input name="note" placeholder="可不填"></label>
+  <button class="confirm-btn" type="submit">确认录入，加入数据库</button>
 </form>
-<a class="second-btn" href="/wishlist">← 返回待购清单</a>
+<a class="second-btn" href="/wishlist">← 返回待购主菜单</a>
 {% endblock %}

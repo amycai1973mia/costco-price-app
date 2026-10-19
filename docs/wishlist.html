@@ -12,76 +12,95 @@ button,.filebtn{display:block;width:100%;box-sizing:border-box;font-size:24px;pa
 .cambtn{background:#0a7a42!important}.savebtn{background:#c00!important;font-size:26px!important}
 .second{background:#fff!important;color:#111!important;border:2px solid #333!important}
 .small{font-size:17px;color:#444}.big{font-size:22px;font-weight:700}
-input.field{width:100%;box-sizing:border-box;font-size:22px;padding:14px 12px;border:2px solid #888;border-radius:10px;background:#fff;min-height:56px;margin:6px 0 14px}
+input.field,select.field{width:100%;box-sizing:border-box;font-size:22px;padding:14px 12px;border:2px solid #888;border-radius:10px;background:#fff;min-height:56px;margin:6px 0 14px}
 label.flabel{font-size:17px;font-weight:700;display:block}
 input[type=file]{display:none}.notice{background:#fff8db;border:2px solid #e67700;border-radius:12px;padding:12px}
 .rec{border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0;background:#fff}
 .delbtn{background:#fff;color:#b00020;border:2px solid #b00020;font-size:18px;padding:10px}
 .rowdel{float:right;background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:44px;height:44px;padding:0}
 .okmsg{font-size:22px;font-weight:700;color:#0a7a00;background:#e6f4ea;border-radius:12px;padding:14px;display:none}
+.qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #bbb;border-radius:10px}
+table.qtable{border-collapse:collapse;min-width:640px;width:100%}
+table.qtable th,table.qtable td{border:1px solid #bbb;padding:9px 8px;font-size:17px;text-align:left;vertical-align:top;white-space:nowrap}
+table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:normal;min-width:150px}
+.qdel{background:#fff;color:#b00020;border:2px solid #b00020;border-radius:8px;font-size:20px;width:40px;height:40px;padding:0;margin:0}
+.qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
 </style></head>
 <body><main>
 <p><a href="./index.html">← 回到小票识别首页</a></p>
 
-<!-- ===== 待购主页：只放大入口，不铺表单 ===== -->
 <section id="view-home">
 <h1>🛒 待购清单</h1>
 <p class="big">未来想买、等打折再买的东西放这里。出现打折就提醒，不设价格门槛。</p>
 <div class="notice"><b>本机测试版：</b>待购数据只存在<b>这台手机的浏览器本地（IndexedDB）</b>，不上传服务器，也和电脑后台的数据库不是同一个库。换手机或清浏览器数据会不见。正式版以后再连后台库。</div>
 
 <h2>第一行：拍照或从相册选照片识别</h2>
-<label class="filebtn cambtn">📷 拍照（打开相机，拍商品牌子或小票）<input id="fileCamera" type="file" accept="image/*" capture="environment"></label>
-<label class="filebtn">🖼 从相册选照片（打开相册选一张）<input id="fileAlbum" type="file" accept="image/*"></label>
-<p class="small" id="ocrStatus">识别后会先到下一个页面让你核对，点「加入待购清单」才保存，不点不存。</p>
+<p class="small">拍的是 Costco 商品牌（价格牌），只认三样：<b>商品代码、商品名称、目前的价格</b>。税、环保费这些不往待购里放，那是小票那边的。</p>
+<label class="filebtn cambtn">📷 拍照（打开相机，拍商品牌）<input id="fileCamera" type="file" accept="image/*" capture="environment"></label>
+<label class="filebtn">🖼 从相册选照片（可以一次选多张）<input id="fileAlbum" type="file" accept="image/*" multiple></label>
+<p class="small" id="ocrStatus">可以一次选多张，全部识别完会先到下一个页面让你核对，点「确认录入，加入数据库」才保存，不点不存。</p>
 
 <h2>第二行：手工录入</h2>
-<button type="button" class="second" id="goManual">✍️ 手工录入（点进去再填商品代码、名称、价格）</button>
+<button type="button" class="second" id="goManual">✍️ 手工录入（点进去再填商品代码、名称、目前价格）</button>
 
 <h2>下面：查已经存好的</h2>
 <button type="button" class="second" id="goQuery">🔍 查询已入库待购产品（不要的可以删除）</button>
 <button type="button" class="second" id="goHistory">🧾 从以前买过的记录加入待购</button>
 </section>
 
-<!-- ===== 手工录入（下一层） ===== -->
 <section id="view-manual" style="display:none">
 <h1>✍️ 手工录入待购商品</h1>
 <div class="card">
 <label class="flabel">商品代码</label><input class="field" id="mCode" inputmode="numeric" placeholder="例如 1412124">
 <label class="flabel">商品名称</label><input class="field" id="mName" placeholder="例如 QUICK OATS">
-<label class="flabel">价格 $（参考价，可不填，不是期望价格）</label><input class="field" id="mPrice" inputmode="decimal" placeholder="例如 11.99">
-<label class="flabel">数量</label><input class="field" id="mQty" inputmode="numeric" placeholder="例如 1">
-<label class="flabel">备注</label><input class="field" id="mNote" placeholder="可不填">
-<button type="button" class="savebtn" id="manualSave">＋ 加入待购清单</button>
+<label class="flabel">目前价格 / 参考价格 $（商品牌上现在的价格，可不填；不是期望价格，不设门槛）</label><input class="field" id="mPrice" inputmode="decimal" placeholder="例如 11.99">
+<label class="flabel" style="font-weight:400;font-size:16px">备注（选填，可不填）</label><input class="field" id="mNote" placeholder="可不填">
+<button type="button" class="savebtn" id="manualSave">确认录入，加入数据库</button>
 </div>
-<button type="button" class="second" data-go="home">← 返回待购清单</button>
+<button type="button" class="second" data-go="home">← 返回待购主菜单</button>
 </section>
 
-<!-- ===== 拍照确认（下一层） ===== -->
 <section id="view-confirm" style="display:none">
 <h1>核对识别到的商品</h1>
-<p class="big">勾选要加入的，可以改；不要的点小 ✕。点最下面「加入待购清单」才保存，不点就不存。</p>
+<p class="big" id="confirmCount"></p>
+<p class="small">只核对三样：商品代码、商品名称、目前的价格。可以改；不要的点小 ✕。没点「确认录入，加入数据库」之前，不会保存。</p>
 <div id="confirmRows"></div>
 <button type="button" class="second" id="addRowBtn">＋ 手工加一行</button>
-<button type="button" class="savebtn" id="confirmSave">＋ 加入待购清单（点这里才保存）</button>
-<button type="button" class="second" data-go="home">← 返回待购清单（不加入）</button>
+<button type="button" class="savebtn" id="confirmSave">确认录入，加入数据库</button>
+<button type="button" class="second" id="confirmBack">← 返回待购主菜单（不加入）</button>
 </section>
 
-<!-- ===== 查询 / 删除 ===== -->
+<section id="view-done" style="display:none">
+<h1>✅ 已完成</h1>
+<p class="big" id="doneMsg" style="background:#e6f4ea;border-radius:12px;padding:16px"></p>
+<p class="small">这次的照片和识别结果已经清空，不会重复留着。</p>
+<button type="button" class="savebtn" id="doneHome" style="background:#0a7a42!important">🏠 返回主菜单</button>
+<button type="button" class="second" id="doneQuery">🔍 去查询已入库待购产品</button>
+</section>
+
 <section id="view-query" style="display:none">
 <h1>🔍 查询已入库待购产品</h1>
-<label class="flabel">按名称或代码查</label>
-<input class="field" id="qInput" placeholder="输名称或代码，不输就是全部">
+<div class="qstatus" id="qStatus">查询状态：全部显示</div>
+<div class="card">
+<label class="flabel">商品名称</label><input class="field" id="qName" placeholder="例如 OATS，可不填">
+<label class="flabel">商品代码</label><input class="field" id="qCode" inputmode="numeric" placeholder="例如 1412124，可不填">
+<label class="flabel">录入日期（从）</label><input class="field" id="qDateFrom" type="date">
+<label class="flabel">录入日期（到）</label><input class="field" id="qDateTo" type="date">
+<label class="flabel">价格最低 $</label><input class="field" id="qPriceMin" inputmode="decimal" placeholder="可不填">
+<label class="flabel">价格最高 $</label><input class="field" id="qPriceMax" inputmode="decimal" placeholder="可不填">
+<label class="flabel">排序</label><select class="field" id="qSort"><option value="date_desc">按录入日期从新到旧（默认）</option><option value="price_asc">按价格从低到高</option><option value="price_desc">按价格从高到低</option></select>
 <button type="button" id="qBtn">🔍 查询</button>
+<button type="button" class="second" id="qClear">清除条件，看全部</button>
+</div>
 <div id="queryList"></div>
-<button type="button" class="second" data-go="home">← 返回待购清单</button>
+<button type="button" class="second" data-go="home">← 返回待购主菜单</button>
 </section>
 
-<!-- ===== 从已购记录加入 ===== -->
 <section id="view-history" style="display:none">
 <h1>🧾 从以前买过的记录加入</h1>
 <p class="small">这里读的是本机小票版已入库记录（同一个浏览器里的 IndexedDB）。每件旁边点「加入待购」就加入，来源记为“从已购记录”。</p>
 <div id="historyList"></div>
-<button type="button" class="second" data-go="home">← 返回待购清单</button>
+<button type="button" class="second" data-go="home">← 返回待购主菜单</button>
 </section>
 
 <p class="okmsg" id="okMsg"></p>
@@ -89,44 +108,75 @@ input[type=file]{display:none}.notice{background:#fff8db;border:2px solid #e6770
 <script>
 const $=id=>document.getElementById(id);
 const SRC={manual:'手工',history:'从已购记录',photo:'拍照'};
-function show(view){ ['home','manual','confirm','query','history'].forEach(v=>$('view-'+v).style.display=(v===view?'block':'none')); window.scrollTo(0,0); }
+function show(view){ ['home','manual','confirm','query','history','done'].forEach(v=>$('view-'+v).style.display=(v===view?'block':'none')); window.scrollTo(0,0); }
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
 function msg(t){ const e=$('okMsg'); e.textContent=t; e.style.display='block'; setTimeout(()=>e.style.display='none',4000); }
-// IndexedDB: costco-wishlist / wishlist
 function openWDB(){ return new Promise((res,rej)=>{ const rq=indexedDB.open('costco-wishlist',1); rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains('wishlist')) db.createObjectStore('wishlist',{keyPath:'id',autoIncrement:true}); }; rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
 async function wAdd(rec){ const db=await openWDB(); const all=await wAll(); if(rec.item_code && all.some(r=>r.item_code===rec.item_code)) return 'dup';
   return new Promise((res,rej)=>{ const tx=db.transaction('wishlist','readwrite'); tx.objectStore('wishlist').add(rec); tx.oncomplete=()=>res('ok'); tx.onerror=()=>rej(tx.error); }); }
-async function wAll(){ const db=await openWDB(); return new Promise((res,rej)=>{ const rq=db.transaction('wishlist','readonly').objectStore('wishlist').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }); }
+async function wAll(){ const db=await openWDB(); return new Promise((res,rej)=>{ const rq=db.transaction('wishlist','readonly').objectStore('wishlist').getAll(); rq.onsuccess=()=>res((rq.result||[]).map(normalizeRec)); rq.onerror=()=>rej(rq.error); }); }
 async function wDelete(id){ const db=await openWDB(); return new Promise((res,rej)=>{ const tx=db.transaction('wishlist','readwrite'); tx.objectStore('wishlist').delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
-function noteOf(price,qty,note){ const p=[]; if(price) p.push('参考价 $'+price); if(qty) p.push('数量 '+qty); if(note) p.push(note); return p.join(' · '); }
+// 旧记录价格藏在备注「参考价 $X」里，读出为独立 price 字段；新记录直接存 price
+function normalizeRec(r){ const o={...r}; if(o.price===undefined||o.price===null||o.price===''){ const m=String(o.note||'').match(/参考价\s*\$\s*([0-9]+(?:\.[0-9]{1,2})?)/); if(m) o.price=m[1]; }
+  o.note=String(o.note||'').replace(/参考价\s*\$\s*[0-9]+(?:\.[0-9]{1,2})?/,'').replace(/数量\s*[0-9]+/,'').split('·').map(s=>s.trim()).filter(Boolean).join(' · ');
+  return o; }
+function entryDateOf(r){ if(!r.created_at) return ''; if(/^\d{4}-\d{2}-\d{2}/.test(r.created_at)) return r.created_at.slice(0,10); const d=new Date(r.created_at); if(!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); return String(r.created_at); }
+function priceNum(r){ const v=parseFloat(r.price); return isNaN(v)?null:v; }
+function clearCurrent(){ confirmItems=[]; $('fileCamera').value=''; $('fileAlbum').value=''; $('ocrStatus').textContent='可以一次选多张，全部识别完会先到下一个页面让你核对，点「确认录入，加入数据库」才保存，不点不存。'; $('confirmRows').innerHTML=''; }
+function showDone(text){ $('doneMsg').textContent=text; show('done'); }
+$('doneHome').addEventListener('click',()=>{ clearCurrent(); show('home'); });
+$('doneQuery').addEventListener('click',async()=>{ clearCurrent(); await renderQuery(); show('query'); });
+$('confirmBack').addEventListener('click',()=>{ clearCurrent(); show('home'); });
 
 // 手工
 $('goManual').addEventListener('click',()=>show('manual'));
 $('manualSave').addEventListener('click',async()=>{
   const code=$('mCode').value.trim(), name=$('mName').value.trim();
   if(!code && !name){ alert('请至少填商品名称或代码。'); return; }
-  const r=await wAdd({item_code:code,item_name:name,note:noteOf($('mPrice').value.trim(),$('mQty').value.trim(),$('mNote').value.trim()),source:'manual',created_at:new Date().toLocaleString()});
-  msg(r==='dup'?'这个商品已经在待购清单里了。':'已加入待购清单 ✓');
-  $('mCode').value=$('mName').value=$('mPrice').value=$('mQty').value=$('mNote').value='';
-  await renderQuery(); show('query');
+  const r=await wAdd({item_code:code,item_name:name,price:$('mPrice').value.trim(),note:$('mNote').value.trim(),source:'manual',created_at:new Date().toISOString()});
+  if(r==='dup'){ msg('这个商品已经在待购清单里了。'); await renderQuery(); show('query'); return; }
+  $('mCode').value=$('mName').value=$('mPrice').value=$('mNote').value='';
+  clearCurrent(); showDone('已加入待购清单 ✓ 共 1 件。');
 });
-// 查询
+// 查询（Excel 式表格行）
 $('goQuery').addEventListener('click',async()=>{ await renderQuery(); show('query'); });
 $('qBtn').addEventListener('click',renderQuery);
+$('qSort').addEventListener('change',renderQuery);
+$('qClear').addEventListener('click',async()=>{ ['qName','qCode','qDateFrom','qDateTo','qPriceMin','qPriceMax'].forEach(id=>$(id).value=''); $('qSort').value='date_desc'; await renderQuery(); });
 async function renderQuery(){
-  const q=$('qInput').value.trim().toLowerCase(); const all=(await wAll()).sort((a,b)=>b.id-a.id);
-  const rows=all.filter(r=>!q || (r.item_name||'').toLowerCase().includes(q) || (r.item_code||'').toLowerCase().includes(q));
-  $('queryList').innerHTML= rows.length? '' : '<p class="big">还没有查到待购商品。</p>';
-  rows.forEach(r=>{ const d=document.createElement('div'); d.className='rec';
-    d.innerHTML=`<b>${esc(r.item_name||'（无名称）')}</b>（${esc(r.item_code||'无代码')}）<br>加入时间：${esc(r.created_at||'')} · 来源：${SRC[r.source]||r.source||''}${r.note?'<br>备注：'+esc(r.note):''}<br>`;
-    const b=document.createElement('button'); b.className='delbtn'; b.textContent='🗑 删除（不要了）';
-    b.addEventListener('click',async()=>{ if(confirm('确定从待购清单删除这件吗？')){ await wDelete(r.id); renderQuery(); } });
-    d.appendChild(b); $('queryList').appendChild(d); });
+  const name=$('qName').value.trim().toLowerCase(), code=$('qCode').value.trim().toLowerCase(), df=$('qDateFrom').value, dt=$('qDateTo').value;
+  const pmin=parseFloat($('qPriceMin').value), pmax=parseFloat($('qPriceMax').value), sort=$('qSort').value;
+  let rows=(await wAll());
+  const filtered=!!(name||code||df||dt||!isNaN(pmin)||!isNaN(pmax));
+  rows=rows.filter(r=>{ const ed=entryDateOf(r), pv=priceNum(r);
+    if(name && !(r.item_name||'').toLowerCase().includes(name)) return false;
+    if(code && !(r.item_code||'').toLowerCase().includes(code)) return false;
+    if(df && ed<df) return false; if(dt && ed>dt) return false;
+    if(!isNaN(pmin)&&(pv===null||pv<pmin)) return false; if(!isNaN(pmax)&&(pv===null||pv>pmax)) return false; return true; });
+  if(sort==='price_asc') rows.sort((a,b)=>{ const x=priceNum(a),y=priceNum(b); return (x===null)-(y===null)||(x||0)-(y||0); });
+  else if(sort==='price_desc') rows.sort((a,b)=>{ const x=priceNum(a),y=priceNum(b); return (x===null)-(y===null)||(y||0)-(x||0); });
+  else rows.sort((a,b)=>b.id-a.id);
+  const sortTxt=sort==='price_asc'?'按价格从低到高':sort==='price_desc'?'按价格从高到低':'默认按录入日期从新到旧';
+  $('qStatus').textContent=`查询状态：${filtered?'按你填的条件查':'全部显示'}，共查到 ${rows.length} 条（${sortTxt}）。点「价格」表头可以按价格排序。表格可以左右滑动看全。`;
+  const box=$('queryList');
+  if(!rows.length){ box.innerHTML='<p class="big">还没有查到待购商品。换个条件试试，或者先去加入一件。</p>'; return; }
+  const wrap=document.createElement('div'); wrap.className='qwrap';
+  const tbl=document.createElement('table'); tbl.className='qtable';
+  tbl.innerHTML=`<thead><tr><th>删除</th><th>商品代码</th><th>商品名称</th><th id="priceHead" style="cursor:pointer">价格 ↕</th><th>录入日期</th><th>来源</th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  rows.forEach(r=>{ const pv=priceNum(r); const tr=document.createElement('tr');
+    tr.innerHTML=`<td><button type="button" class="qdel" title="删除这一条">−</button></td><td>${esc(r.item_code||'无代码')}</td><td class="name">${esc(r.item_name||'（无名称）')}${r.note?'<br><small>备注：'+esc(r.note)+'</small>':''}</td><td>${pv===null?'—':'$'+pv.toFixed(2)}</td><td>${esc(entryDateOf(r))}</td><td>${esc(SRC[r.source]||r.source||'')}</td>`;
+    tr.querySelector('.qdel').addEventListener('click',async()=>{ if(confirm('确定从待购清单删除这一条吗？')){ await wDelete(r.id); renderQuery(); } });
+    tb.appendChild(tr); });
+  tbl.appendChild(tb); wrap.appendChild(tbl); box.innerHTML=''; box.appendChild(wrap);
+  const hint=document.createElement('p'); hint.className='small'; hint.textContent='每一行最前面是删除号 −，不要这一条了点它，确认后就删掉。'; box.appendChild(hint);
+  tbl.querySelector('#priceHead').addEventListener('click',()=>{ $('qSort').value=($('qSort').value==='price_asc'?'price_desc':'price_asc'); renderQuery(); });
 }
-// 拍照识别 -> 确认页（不点加入不保存）
+// 拍照/相册识别 -> 确认页（不点确认不保存）
 let confirmItems=[];
 function renderConfirm(){
+  $('confirmCount').textContent=`共识别到 ${confirmItems.length} 件，请核对。核对正确后，点下面「确认录入，加入数据库」，才算完成。`;
   const box=$('confirmRows'); box.innerHTML='';
   if(!confirmItems.length) box.innerHTML='<p class="big">没识别出商品，可以点「＋ 手工加一行」，或回去用手工录入。</p>';
   confirmItems.forEach((it,i)=>{ const d=document.createElement('div'); d.className='rec';
@@ -134,8 +184,8 @@ function renderConfirm(){
       <label class="flabel"><input type="checkbox" class="c-check" ${it.checked?'checked':''} style="transform:scale(1.5)"> 要加入</label>
       <label class="flabel">商品代码</label><input class="field c-code" inputmode="numeric" value="${esc(it.item_code||'')}">
       <label class="flabel">商品名称</label><input class="field c-name" value="${esc(it.item_name||'')}">
-      <label class="flabel">价格 $</label><input class="field c-price" inputmode="decimal" value="${it.price??''}">
-      <label class="flabel">备注</label><input class="field c-note" value="">`;
+      <label class="flabel">目前价格 $</label><input class="field c-price" inputmode="decimal" value="${it.price??''}">
+      <label class="flabel" style="font-weight:400;font-size:16px">备注（选填）</label><input class="field c-note" value="">`;
     d.querySelector('.rowdel').addEventListener('click',()=>{ syncConfirm(); confirmItems.splice(i,1); renderConfirm(); });
     box.appendChild(d); });
 }
@@ -145,26 +195,42 @@ function syncConfirm(){ document.querySelectorAll('#confirmRows .rec').forEach((
 $('addRowBtn').addEventListener('click',()=>{ syncConfirm(); confirmItems.push({item_code:'',item_name:'',price:'',checked:true}); renderConfirm(); });
 $('confirmSave').addEventListener('click',async()=>{ syncConfirm(); let added=0,dup=0;
   for(const it of confirmItems){ if(!it.checked || (!it.item_code && !it.item_name)) continue;
-    const r=await wAdd({item_code:it.item_code,item_name:it.item_name,note:noteOf(it.price,'',it.note||''),source:'photo',created_at:new Date().toLocaleString()}); r==='dup'?dup++:added++; }
-  msg(`已加入待购清单 ✓ 共 ${added} 件`+(dup?`，${dup} 件已在清单里跳过。`:'')); confirmItems=[]; await renderQuery(); show('query'); });
-async function doOCR(file){
-  if(!file) return; $('ocrStatus').textContent='正在识别照片…手机上可能要十几秒，请等一下。'; show('home');
+    const r=await wAdd({item_code:it.item_code,item_name:it.item_name,price:String(it.price||''),note:it.note||'',source:'photo',created_at:new Date().toISOString()}); r==='dup'?dup++:added++; }
+  clearCurrent(); showDone(`已加入待购清单 ✓ 共 ${added} 件`+(dup?`，${dup} 件已经在清单里跳过了。`:'')); });
+// 商品牌兜底：小票解析没出商品时，从识别文字里抓代码/名称/价格三项
+function signFallback(text){
+  const lines=String(text||'').split(/\n/).map(s=>s.trim()).filter(Boolean);
+  let code='', price='', name='';
+  for(const t of lines){ if(!code){ const m=t.match(/\b(\d{5,7})\b/); if(m) code=m[1]; }
+    if(!price){ const m=t.match(/\$?\s*(\d{1,4}\.\d{2})\b/); if(m && !/SUBTOTAL|TOTAL|TAX/i.test(t)) price=m[1]; }
+    if(!/SUBTOTAL|TOTAL|TAX|ENVIRO|DEPOSIT|ITEMS/i.test(t)){ const w=t.replace(/\b\d{5,7}\b/g,' ').replace(/\$?\s*\d{1,4}\.\d{2}\b/g,' ').replace(/\$/g,' ').split(/\s+/).filter(x=>!/^ITEM$/i.test(x)&&!/^COSTCO$/i.test(x)).join(' ').trim(); if(w.replace(/[^A-Za-z]/g,'').length>=3 && w.replace(/[^A-Za-z]/g,'').length>(name?name.replace(/[^A-Za-z]/g,'').length:0)) name=w; } }
+  return (code||name||price)?[{item_code:code,item_name:name,price,checked:true}]:[];
+}
+async function doOCR(files){
+  const list=[...(files||[])].filter(Boolean); if(!list.length) return;
+  show('home'); confirmItems=[];
   try{ const worker=await Tesseract.createWorker('eng');
-    async function ocrOne(src){ const {data}=await worker.recognize(src); const lines=(data.text||'').split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>({text:s,conf:(data.confidence?data.confidence/100:0.5)})); return parseReceipt(lines); }
-    // 先用预处理（找小票+拉正+灰度，与小票首页同一套 preprocess.js），认得少再用二值图重试取较好一份
-    let parsed=null;
-    try{ const prep=await preprocessReceipt(file); parsed=await ocrOne(prep.grayCanvas);
-      const good=(parsed.items||[]).filter(it=>!it.is_discount && (it.item_code||it.item_name)).length;
-      if(good<2){ const p2=await ocrOne(prep.otsuCanvas); const g2=(p2.items||[]).filter(it=>!it.is_discount && (it.item_code||it.item_name)).length; if(g2>good) parsed=p2; }
-    }catch(e){ parsed=await ocrOne(file); }
+    async function ocrOne(src){ const {data}=await worker.recognize(src); const lines=(data.text||'').split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>({text:s,conf:(data.confidence?data.confidence/100:0.5)})); return {parsed:parseReceipt(lines), text:data.text||''}; }
+    for(let idx=0; idx<list.length; idx++){
+      const file=list[idx];
+      $('ocrStatus').textContent=`正在识别第 ${idx+1}/${list.length} 张照片…手机上可能要十几秒，请等一下。`;
+      let got=null;
+      try{ const prep=await preprocessReceipt(file); got=await ocrOne(prep.grayCanvas);
+        const good=(got.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee && (it.item_code||it.item_name)).length;
+        if(good<1){ const p2=await ocrOne(prep.otsuCanvas); const g2=(p2.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee && (it.item_code||it.item_name)).length; if(g2>good) got=p2; }
+      }catch(e){ got=await ocrOne(file); }
+      let items=(got.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee).map(it=>({item_code:it.item_code||'',item_name:it.item_name||'',price:(it.price===''||it.price==null?'':it.price),checked:true}));
+      if(!items.length) items=signFallback(got.text);
+      else if(items.length===1 && (!items[0].item_name || /^(ITEM|COSTCO)$/i.test(items[0].item_name.trim()))){ const fb=signFallback(got.text); if(fb.length && fb[0].item_name) items[0].item_name=fb[0].item_name; }
+      confirmItems.push(...items);
+    }
     await worker.terminate();
-    confirmItems=(parsed.items||[]).filter(it=>!it.is_discount).map(it=>({item_code:it.item_code||'',item_name:it.item_name||'',price:(it.price===''||it.price==null?'':it.price),checked:true}));
     $('ocrStatus').textContent='识别完成，请在下一个页面核对。'; renderConfirm(); show('confirm');
   }catch(e){ $('ocrStatus').textContent='识别没成功：'+(e.message||e)+'，可以改用手工录入。'; }
 }
-$('fileCamera').addEventListener('change',e=>doOCR(e.target.files[0]));
-$('fileAlbum').addEventListener('change',e=>doOCR(e.target.files[0]));
-// 从已购记录加入（读小票版 costco-receipts，如无则提示）
+$('fileCamera').addEventListener('change',e=>doOCR(e.target.files));
+$('fileAlbum').addEventListener('change',e=>doOCR(e.target.files));
+// 从已购记录加入（读小票版 costco-receipts）
 $('goHistory').addEventListener('click',async()=>{ show('history'); const box=$('historyList'); box.innerHTML='正在读以前买过的记录…';
   try{ const recs=await new Promise((res,rej)=>{ const rq=indexedDB.open('costco-receipts',1); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); })
     .then(db=>new Promise((res,rej)=>{ if(!db.objectStoreNames.contains('receipts')){ res([]); return; } const rq=db.transaction('receipts','readonly').objectStore('receipts').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }));
@@ -172,7 +238,7 @@ $('goHistory').addEventListener('click',async()=>{ show('history'); const box=$(
     const items=[...seen.values()]; box.innerHTML=items.length?'':'<p class="big">这个浏览器里还没有已入库的小票记录。先去小票首页入库一张，这里就会出现。</p>';
     items.forEach(it=>{ const d=document.createElement('div'); d.className='rec'; d.innerHTML=`<b>${esc(it.item_name||'')}</b>（${esc(it.item_code||'无代码')}） ${it.price!=null?'$'+esc(it.price):''} `;
       const b=document.createElement('button'); b.className='delbtn'; b.style.color='#0a7a00'; b.style.borderColor='#0a7a00'; b.textContent='加入待购';
-      b.addEventListener('click',async()=>{ const r=await wAdd({item_code:it.item_code||'',item_name:it.item_name||'',note:it.price!=null?('参考价 $'+it.price):'',source:'history',created_at:new Date().toLocaleString()}); msg(r==='dup'?'这个商品已经在待购清单里了。':'已加入待购清单 ✓'); });
+      b.addEventListener('click',async()=>{ const r=await wAdd({item_code:it.item_code||'',item_name:it.item_name||'',price:it.price!=null?String(it.price):'',note:'',source:'history',created_at:new Date().toISOString()}); msg(r==='dup'?'这个商品已经在待购清单里了。':'已加入待购清单 ✓'); });
       d.appendChild(b); box.appendChild(d); });
   }catch(e){ box.innerHTML='读取已购记录失败：'+esc(e.message||e); }
 });

@@ -252,24 +252,38 @@ def history():
     return render_template("history.html", rows=rows, summary=summary, q=dict(date_from=df, date_to=dt, keyword=kw, code=code), searched=bool(request.args))
 
 # ---------------- 待购清单 ----------------
+# 待购只记三项主体：商品代码 / 商品名称 / 目前价格（参考价格）。价格不设门槛：
+# wishlist 表无价格列，价格以「参考价 $X」拼入 note 保存，查询时解析出来单独成列/筛选/排序。
+# 税、环保费/押金、小计、总额是小票那边的，待购识别与确认页一律不收这些。
+import re as _re
+def _wishlist_price(note):
+    m=_re.search(r"参考价\s*\$\s*([0-9]+(?:\.[0-9]{1,2})?)", note or "")
+    return float(m.group(1)) if m else None
+def _wishlist_clean_note(note):
+    s=_re.sub(r"参考价\s*\$\s*[0-9]+(?:\.[0-9]{1,2})?", "", note or "")
+    s=_re.sub(r"数量\s*[0-9]+", "", s)
+    return " · ".join(x.strip() for x in s.split("·") if x.strip())
+def _wishlist_enrich(rows):
+    out=[]
+    for r in rows:
+        d=dict(r); pv=_wishlist_price(d.get("note"))
+        d["price_value"]=pv; d["price_display"]=(f"${pv:.2f}" if pv is not None else "—")
+        d["clean_note"]=_wishlist_clean_note(d.get("note")); d["entry_date"]=(d.get("created_at") or "")[:10]
+        d["source_label"]={"manual":"手工","history":"从已购记录","photo":"拍照"}.get(d.get("source"), d.get("source") or "")
+        out.append(d)
+    return out
+
 @app.route("/wishlist")
 @login_required
 def wishlist():
-    q = request.args.get("q", "").strip(); con = db()
-    if q:
-        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 AND (item_name LIKE ? OR item_code LIKE ?) ORDER BY id DESC",
-                           (session["user_id"], f"%{q}%", f"%{q}%")).fetchall()
-    else:
-        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id DESC", (session["user_id"],)).fetchall()
-    con.close(); return render_template("wishlist.html", rows=rows, q=q)
+    return render_template("wishlist.html")
 
 def _wishlist_note_with_price_note(form):
-    # wishlist 表无价格/数量列（不设期望价格门槛）：手工填的参考价/数量只拼进备注 note 显示，不另建价格字段。
+    # 价格只是目前价格/参考价格（拼进备注显示与解析），不是期望价格门槛。
     note = (form.get("note", "") or "").strip()
-    price = (form.get("item_price", "") or "").strip(); qty = (form.get("item_quantity", "") or "").strip()
+    price = (form.get("item_price", "") or "").strip()
     parts = []
     if price: parts.append(f"参考价 ${price}")
-    if qty: parts.append(f"数量 {qty}")
     if note: parts.append(note)
     return " · ".join(parts)
 
@@ -284,10 +298,11 @@ def wishlist_add():
     con = db()
     try:
         con.execute("INSERT INTO wishlist(user_id,item_code,item_name,note,source,source_receipt_item_id) VALUES(?,?,?,?,?,?)",
-                    (session["user_id"], code, name, note, source, src_item)); con.commit(); flash("已加入待购清单 ✓")
-    except sqlite3.IntegrityError: flash("这个商品已经在你的待购清单里了。")
+                    (session["user_id"], code, name, note, source, src_item)); con.commit(); added=1
+    except sqlite3.IntegrityError: added=0; flash("这个商品已经在你的待购清单里了。")
     con.close()
-    if source == "history": return redirect(url_for("history"))
+    if source == "history": flash("已加入待购清单 ✓"); return redirect(url_for("history"))
+    if added: return redirect(url_for("wishlist_done", added=1))
     return redirect(url_for("wishlist_query"))
 
 @app.route("/wishlist/manual")
@@ -295,16 +310,51 @@ def wishlist_add():
 def wishlist_manual():
     return render_template("wishlist_manual.html")
 
+@app.route("/wishlist/done")
+@login_required
+def wishlist_done():
+    try: added=int(request.args.get("added", "1"))
+    except ValueError: added=1
+    skipped=request.args.get("skipped", "")
+    return render_template("wishlist_done.html", added=added, skipped=skipped)
+
 @app.route("/wishlist/query")
 @login_required
 def wishlist_query():
-    q = request.args.get("q", "").strip(); con = db()
-    if q:
-        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 AND (item_name LIKE ? OR item_code LIKE ?) ORDER BY id DESC",
-                           (session["user_id"], f"%{q}%", f"%{q}%")).fetchall()
-    else:
-        rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id DESC", (session["user_id"],)).fetchall()
-    con.close(); return render_template("wishlist_query.html", rows=rows, q=q)
+    # 查询条件：名称 / 代码 / 录入日期范围 / 价格范围；默认按录入日期新到旧，价格可排序
+    qa={
+        "q": request.args.get("q", "").strip(),
+        "name": request.args.get("name", "").strip(),
+        "code": request.args.get("code", "").strip(),
+        "date_from": request.args.get("date_from", "").strip(),
+        "date_to": request.args.get("date_to", "").strip(),
+        "price_min": request.args.get("price_min", "").strip(),
+        "price_max": request.args.get("price_max", "").strip(),
+        "sort": request.args.get("sort", "date_desc").strip(),
+    }
+    con = db()
+    rows = con.execute("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id DESC", (session["user_id"],)).fetchall()
+    con.close()
+    rows=_wishlist_enrich(rows)
+    def _f(s):
+        try: return float(s)
+        except (TypeError, ValueError): return None
+    pmin, pmax=_f(qa["price_min"]), _f(qa["price_max"])
+    def keep(d):
+        if qa["q"] and qa["q"].lower() not in (d.get("item_name") or "").lower() and qa["q"].lower() not in (d.get("item_code") or "").lower(): return False
+        if qa["name"] and qa["name"].lower() not in (d.get("item_name") or "").lower(): return False
+        if qa["code"] and qa["code"].lower() not in (d.get("item_code") or "").lower(): return False
+        if qa["date_from"] and d["entry_date"] < qa["date_from"]: return False
+        if qa["date_to"] and d["entry_date"] > qa["date_to"]: return False
+        if pmin is not None and (d["price_value"] is None or d["price_value"] < pmin): return False
+        if pmax is not None and (d["price_value"] is None or d["price_value"] > pmax): return False
+        return True
+    rows=[d for d in rows if keep(d)]
+    if qa["sort"]=="price_asc": rows.sort(key=lambda d:(d["price_value"] is None, d["price_value"] or 0))
+    elif qa["sort"]=="price_desc": rows.sort(key=lambda d:(d["price_value"] is None, -(d["price_value"] or 0)))
+    # date_desc 已由 SQL id DESC（录入越新 id 越大）保证
+    filtered=any(qa[k] for k in ("q","name","code","date_from","date_to","price_min","price_max"))
+    return render_template("wishlist_query.html", rows=rows, q=qa["q"], qa=qa, filtered=filtered)
 
 @app.route("/wishlist/photo/confirm-add", methods=["POST"])
 @login_required
@@ -323,27 +373,78 @@ def wishlist_photo_confirm_add():
                         (session["user_id"], code, name, note)); added += 1
         except sqlite3.IntegrityError: skipped += 1
     con.commit(); con.close()
-    flash(f"已加入待购清单 ✓ 共 {added} 件" + (f"，{skipped} 件已在清单里跳过。" if skipped else ""))
-    return redirect(url_for("wishlist_query"))
+    # 完成提示 + 返回主菜单在完成页；本次识别结果不保留（确认页是一次性渲染，离开即清空）
+    return redirect(url_for("wishlist_done", added=added, skipped=skipped))
 
 @app.route("/wishlist/<int:wid>/delete", methods=["POST"])
 @login_required
 def wishlist_delete(wid):
     con = db(); con.execute("UPDATE wishlist SET is_active=0 WHERE id=? AND user_id=?", (wid, session["user_id"])); con.commit(); con.close()
-    flash("已从待购清单移除。"); return redirect(url_for("wishlist_query"))
+    flash("已从待购清单移除。")
+    # 删后回到查询页，并尽量保留原来的查询条件
+    keep={k:v for k,v in request.form.items() if k in ("q","name","code","date_from","date_to","price_min","price_max","sort") and v}
+    return redirect(url_for("wishlist_query", **keep))
+
+def _sign_items_from_raw(raw_lines):
+    """商品牌兜底：小票解析没出商品时，从原始行里抓 代码/名称/价格 三项各一份，组成一件。
+    只抓三项，税/环保费/押金/总额等词所在行不作名称。"""
+    texts=[(l.get("text") if isinstance(l, dict) else str(l) or "").strip() for l in (raw_lines or [])]
+    texts=[t for t in texts if t]
+    if not texts: return []
+    code=""; price=None; name_parts=[]
+    for t in texts:
+        if not code:
+            m=_re.search(r"\b(\d{5,7})\b", t)
+            if m: code=m.group(1)
+        if price is None:
+            m=_re.search(r"\$?\s*(\d{1,4}\.\d{2})\b", t)
+            if m and not _re.search(r"SUBTOTAL|TOTAL|TAX", t, _re.I): price=float(m.group(1))
+        if _re.search(r"SUBTOTAL|TOTAL|TAX|ENVIRO|DEPOSIT|ITEMS\s*SOLD", t, _re.I): continue
+        words=_re.sub(r"\b\d{5,7}\b", " ", t); words=_re.sub(r"\$?\s*\d{1,4}\.\d{2}\b", " ", words)
+        words=" ".join(w for w in words.replace("$"," ").split() if w.upper() not in ("ITEM","COSTCO"))
+        if len(_re.sub(r"[^A-Za-z]", "", words))>=3: name_parts.append(words)
+    name=max(name_parts, key=lambda s: len(_re.sub(r"[^A-Za-z]", "", s))) if name_parts else ""
+    if code or name or price is not None:
+        return [{"item_code":code, "item_name":name, "price":("" if price is None else price)}]
+    return []
 
 @app.route("/wishlist/photo", methods=["POST"])
 @login_required
 def wishlist_photo():
-    f = request.files.get("receipt")
-    if not f or not f.filename: flash("请先选一张照片。"); return redirect(url_for("wishlist"))
-    rid = uuid.uuid4().hex[:12]; dest = UPLOADS / f"wish{rid}.jpg"; f.save(dest)
-    items = []
+    files=[f for f in request.files.getlist("photos") if f and f.filename]
+    if not files:
+        f=request.files.get("receipt")
+        if f and f.filename: files=[f]
+    if not files: flash("请先选照片。"); return redirect(url_for("wishlist"))
+    items=[]; failed=0
     try:
         from ocr_parser import recognize
-        items = [it for it in recognize(str(dest), str(PENDING / rid)).get("items", []) if not it.get("is_discount")]
+        for f in files:
+            rid = uuid.uuid4().hex[:12]; dest = UPLOADS / f"wish{rid}.jpg"; f.save(dest)
+            try:
+                result=recognize(str(dest), str(PENDING / rid))
+                got=[{"item_code":it.get("item_code",""), "item_name":it.get("item_name",""), "price":it.get("price","")}
+                     for it in result.get("items", []) if not it.get("is_discount") and not it.get("is_fee")]
+                if not got:
+                    # 商品牌不是小票：小票预处理会裁掉牌子边缘/大字价格，故兜底改为对原图直认再抓三项
+                    try:
+                        from ocr_parser import ocr_lines as _ol
+                        got=_sign_items_from_raw(_ol(str(dest)))
+                    except Exception: got=[]
+                    if not got: got=_sign_items_from_raw(result.get("raw_lines"))
+                elif len(got)==1 and (not got[0]["item_name"] or got[0]["item_name"].strip().upper() in ("ITEM","COSTCO")):
+                    fb=[]
+                    try:
+                        from ocr_parser import ocr_lines as _ol
+                        fb=_sign_items_from_raw(_ol(str(dest)))
+                    except Exception: fb=[]
+                    if not fb: fb=_sign_items_from_raw(result.get("raw_lines"))
+                    if fb and fb[0]["item_name"]: got[0]["item_name"]=fb[0]["item_name"]
+                items.extend(got)
+            except Exception: failed+=1
     except Exception as e: flash(f"识别失败：{e}，可以改用手工填写。"); return redirect(url_for("wishlist"))
-    return render_template("wishlist_photo.html", items=items)
+    if failed: flash(f"有 {failed} 张照片没识别成功，其余已列在下面核对。")
+    return render_template("wishlist_photo.html", items=items, photo_count=len(files))
 
 # ---------------- 提醒对比（纯本地 SQL/逻辑，不调用 AI） ----------------
 def generate_alerts(only_user=None):
