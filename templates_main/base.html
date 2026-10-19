@@ -3,7 +3,7 @@
 <style>.fee{color:#b00020;font-size:18px;margin:2px 0 8px 18px}.nav a{display:inline-block;margin:6px 8px 6px 0;font-size:20px}.ok{color:#0a7a00;font-weight:700}</style></head>
 <body><main>
 {% if me %}<p class="nav">你好，{{ me.display_name or me.email }} {% if me.role=='admin' %}（运营者）{% endif %}<br>
-<a href="/">🏠 首页</a><a href="/receipts">🧾 我的小票</a><a href="/history">🔍 历史查询</a><a href="/wishlist">🛒 待购清单</a><a href="/alerts">🔔 我的提醒</a>{% if me.role=='admin' %}<a href="/admin">⚙️ 运营后台</a>{% endif %}<a href="/logout">退出</a></p>{% endif %}
+<a href="/">🏠 返回主菜单</a><a href="/receipts">🧾 我的小票</a><a href="/history">🔍 历史查询</a><a href="/wishlist">🛒 待购清单</a><a href="/alerts">🔔 我的提醒</a>{% if me.role=='admin' %}<a href="/admin">⚙️ 运营后台</a>{% endif %}<a href="/logout">退出</a></p>{% endif %}
 {% with msgs=get_flashed_messages() %}{% for m in msgs %}<p class="ok" style="background:#e8f6e8;padding:12px;border-radius:10px">{{ m }}</p>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}
 </main></body></html>

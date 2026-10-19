@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Costco 小票识别试用</title>
+<title>Costco 小票助手</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="parser.js"></script>
 <script src="preprocess.js"></script>
@@ -78,12 +78,29 @@ input.field.f-fee-amount{font-size:17px;padding:5px 6px;min-height:36px;border-w
 .subtotalbar .sb-title{font-size:20px;font-weight:800}
 .subtotalbar .sb-main{font-size:21px;font-weight:700;margin-top:4px}
 .subtotalbar .sb-cmp{font-size:18px;margin-top:4px}
+.entry{display:block;width:100%;box-sizing:border-box;text-align:left;border:0;border-radius:16px;padding:20px 18px;margin:0 0 14px;font-size:24px;font-weight:700;cursor:pointer;line-height:1.35;color:#fff;text-decoration:none}
+.entry small{display:block;font-size:16px;font-weight:400;margin-top:5px}
+.e-red{background:#c8102e}.e-blue{background:#005daa}.e-orange{background:#e65100}.e-grey{background:#eceff1;color:#263238;border:2px solid #b0bec5}
+.stats{font-size:17px;background:#f4f6f8;border-radius:12px;padding:10px 12px;margin-bottom:16px}
+.homepanel{border:2px solid #005daa;border-radius:12px;padding:14px;margin:12px 0;background:#eef6ff}
 </style>
 </head>
 <body>
 <main>
-<h1>Costco 小票识别试用</h1>
-<p><a href="./wishlist.html" style="font-size:22px;font-weight:700">🛒 待购清单（想买等打折）→</a></p>
+<section id="homeView">
+<h1>Costco 小票助手</h1>
+<p class="small">点一个大入口进去，再拍照、填写或查询。</p>
+<div class="stats" id="homeStats">未入库草稿 0 张 · 待购草稿 0 件</div>
+<button type="button" class="entry e-red" id="goReceiptsHome">🧾 已买小票<small>拍照录小票、手工录入、查未入库草稿</small></button>
+<button type="button" class="entry e-blue" id="goWishlistHome">🛒 待购清单<small>未来想买、等打折再买的东西</small></button>
+<button type="button" class="entry e-orange" id="goAlertsHome">🔔 我的提醒<small>待购打折、买过的降价提醒</small></button>
+<button type="button" class="entry e-grey" id="goAdminHome">⚙️ 运营后台<small>运营者管理用户、订阅和打折数据</small></button>
+<p class="small">手机版还没连上后台总数据库，确认后先存未入库草稿（待同步，未进总库）。</p>
+<div class="homepanel" id="alertsPanel" style="display:none"><div class="big">🔔 我的提醒</div><p class="small">提醒要在后台总数据库里，把打折数据和已入库小票、待购对上后才会生成。手机版还没连上总库，所以这里暂时看不到真提醒；请在后台总库版登录后点「我的提醒」查看。</p><button type="button" class="addbtn panelBackHome">🏠 返回主菜单</button></div>
+<div class="homepanel" id="adminPanel" style="display:none"><div class="big">⚙️ 运营后台</div><p class="small">运营后台在后台总库版里，只有运营者账号能进，普通账号进去会提示无权访问。手机公开页不能直接进真后台；请在服务器电脑打开后台总库版（http://127.0.0.1:5004），用运营者账号登录后从首页进「运营后台」。</p><button type="button" class="addbtn panelBackHome">🏠 返回主菜单</button></div>
+</section>
+<section id="receiptView" style="display:none">
+<button type="button" id="topBackHome" class="addbtn">🏠 返回主菜单</button>
 <p class="notice">⚠️ <b>目前这个手机公开链接还没有连上后台总数据库，所以在手机上还不能真正入库。</b><br>照片识别在手机上做，可能要等几十秒。核对阶段叫<b>待确认</b>；确认后只能先保存为<b>未入库草稿（待同步，未进总库）</b>，<b>不叫已入库</b>。<br>真正入库请用后台总库版（在这台服务器电脑上打开 http://127.0.0.1:5004，登录同一账号后确认入库）；那边点「确认无误，入库」才算已入库，查询也查总库。</p>
 <div class="card" id="receiptMenu">
   <div class="big">已买小票</div>
@@ -188,6 +205,7 @@ input.field.f-fee-amount{font-size:17px;padding:5px 6px;min-height:36px;border-w
   <button id="clearRecords" class="clearbtn">清空全部未入库草稿</button>
 </div>
 <p class="small">网页试用版：手机上 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和后台总库版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
+</section>
 </main>
 <script>
 let selectedFiles=[]; // [{file,url}] 按用户选入顺序识别、合并
@@ -655,7 +673,7 @@ function resetToHome(){
   $('raw').textContent=''; $('count').textContent=''; $('amount').textContent=''; const fa=$('fullAmount'); if(fa) fa.textContent='';
   $('bar').style.width='0%'; $('status').textContent='还没有选照片：请先点「📷 拍照」或「🖼 从相册选」';
   const sb=$('saveBtn'); sb.disabled=false; sb.textContent='确认内容无误，保存为未入库草稿'; $('saveMsg').style.display='none';
-  renderThumbs(); renderRecords(); window.scrollTo({top:0,behavior:'smooth'});
+  renderThumbs(); renderRecords(); showHomeView(); updateHomeStats(); window.scrollTo({top:0,behavior:'smooth'});
 }
 $('backHome').addEventListener('click',resetToHome);
 // --- 与待购同一套节奏：手工下一层 -> 待确认核对 -> 保存草稿；查询是下一层 ---
@@ -710,13 +728,25 @@ $('saveBtn').addEventListener('click',async()=>{
     $('saveMsg').style.display='block'; $('saveMsg').textContent=msg;
     const sb=$('saveBtn'); sb.disabled=true; sb.textContent='已保存为未入库草稿（还没入库）';
     const dp=$('donePanel'); if(dp){ $('doneText').textContent=msg+' —— 这张办完了'; dp.style.display='block'; }
-    await renderRecords();
+    await renderRecords(); updateHomeStats();
     if(dp) dp.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='保存草稿失败：'+(e&&e.message?e.message:e); }
 });
 $('refreshRecords').addEventListener('click',renderRecords);
 $('clearRecords').addEventListener('click',async()=>{ if(confirm('确定要清空全部未入库草稿吗？清了就找不回来。')){ await idbClear(); renderRecords(); } });
 renderRecords();
+
+function showHomeView(){ const h=$('homeView'),r=$('receiptView'); if(h)h.style.display='block'; if(r)r.style.display='none'; }
+function showReceiptView(){ const h=$('homeView'),r=$('receiptView'); if(h)h.style.display='none'; if(r)r.style.display='block'; window.scrollTo({top:0,behavior:'smooth'}); }
+async function countIDB(dbName,storeName){ try{ if(indexedDB.databases){ const ds=await indexedDB.databases(); if(!ds.some(d=>d.name===dbName)) return 0; } const db=await new Promise((res,rej)=>{ const rq=indexedDB.open(dbName,1); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); if(!db.objectStoreNames.contains(storeName)){ db.close(); return 0; } const n=await new Promise((res,rej)=>{ const rq=db.transaction(storeName,'readonly').objectStore(storeName).count(); rq.onsuccess=()=>res(rq.result||0); rq.onerror=()=>rej(rq.error); }); db.close(); return n; }catch(e){ return 0; } }
+async function updateHomeStats(){ const el=$('homeStats'); if(!el) return; const a=await countIDB('costco-receipts','receipts'); const b=await countIDB('costco-wishlist','wishlist'); el.textContent=`未入库草稿 ${a} 张 · 待购草稿 ${b} 件`; }
+const _grh=$('goReceiptsHome'); if(_grh) _grh.addEventListener('click',showReceiptView);
+const _gwh=$('goWishlistHome'); if(_gwh) _gwh.addEventListener('click',()=>{ location.href='./wishlist.html'; });
+const _gah=$('goAlertsHome'); if(_gah) _gah.addEventListener('click',()=>{ $('adminPanel').style.display='none'; $('alertsPanel').style.display='block'; $('alertsPanel').scrollIntoView({behavior:'smooth',block:'center'}); });
+const _gad=$('goAdminHome'); if(_gad) _gad.addEventListener('click',()=>{ $('alertsPanel').style.display='none'; $('adminPanel').style.display='block'; $('adminPanel').scrollIntoView({behavior:'smooth',block:'center'}); });
+document.querySelectorAll('.panelBackHome').forEach(b=>b.addEventListener('click',()=>{ $('alertsPanel').style.display='none'; $('adminPanel').style.display='none'; window.scrollTo({top:0,behavior:'smooth'}); }));
+const _tbh=$('topBackHome'); if(_tbh) _tbh.addEventListener('click',resetToHome);
+updateHomeStats();
 
 const _rb=$('retryPaddle');
 if(_rb) _rb.addEventListener('click',async()=>{
