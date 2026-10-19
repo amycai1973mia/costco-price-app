@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>待购清单 — Costco 小票助手（手机本机测试版）</title>
+<title>待购清单 — Costco 助手（手机本机测试版）</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="parser.js"></script>
 <script src="preprocess.js"></script>
@@ -27,7 +27,7 @@ table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:
 .qstatus{background:#eef4fb;border:2px solid #005daa;border-radius:10px;padding:12px;font-size:19px}
 </style></head>
 <body><main>
-<p><a href="./index.html">← 回到小票识别首页</a></p>
+<p><a href="./index.html">← 回到首页</a></p>
 
 <section id="view-home">
 <h1>🛒 待购清单</h1>
@@ -35,7 +35,7 @@ table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:
 <div class="notice"><b>本机测试版：</b>待购数据只存在<b>这台手机的浏览器本地（IndexedDB）</b>，不上传服务器，也和电脑后台的数据库不是同一个库。换手机或清浏览器数据会不见。正式版以后再连后台库。</div>
 
 <h2>第一行：拍照或从相册选照片识别</h2>
-<p class="small">拍的是 Costco 商品牌（价格牌），只认三样：<b>商品代码、商品名称、目前的价格</b>。税、环保费这些不往待购里放，那是小票那边的。</p>
+<p class="small">拍的是 Costco 商品牌（价格牌），待购只认三样：<b>商品代码、商品名称、目前的价格</b>，没有别的栏目。</p>
 <label class="filebtn cambtn">📷 拍照（打开相机，拍商品牌）<input id="fileCamera" type="file" accept="image/*" capture="environment"></label>
 <label class="filebtn">🖼 从相册选照片（可以一次选多张）<input id="fileAlbum" type="file" accept="image/*" multiple></label>
 <p class="small" id="ocrStatus">可以一次选多张，全部识别完会先到下一个页面让你核对，点「确认录入，加入数据库」才保存，不点不存。</p>
@@ -54,7 +54,6 @@ table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:
 <label class="flabel">商品代码</label><input class="field" id="mCode" inputmode="numeric" placeholder="例如 1412124">
 <label class="flabel">商品名称</label><input class="field" id="mName" placeholder="例如 QUICK OATS">
 <label class="flabel">目前价格 / 参考价格 $（商品牌上现在的价格，可不填；不是期望价格，不设门槛）</label><input class="field" id="mPrice" inputmode="decimal" placeholder="例如 11.99">
-<label class="flabel" style="font-weight:400;font-size:16px">备注（选填，可不填）</label><input class="field" id="mNote" placeholder="可不填">
 <button type="button" class="savebtn" id="manualSave">确认录入，加入数据库</button>
 </div>
 <button type="button" class="second" data-go="home">← 返回待购主菜单</button>
@@ -98,7 +97,7 @@ table.qtable th{background:#005daa;color:#fff} table.qtable td.name{white-space:
 
 <section id="view-history" style="display:none">
 <h1>🧾 从以前买过的记录加入</h1>
-<p class="small">这里读的是本机小票版已入库记录（同一个浏览器里的 IndexedDB）。每件旁边点「加入待购」就加入，来源记为“从已购记录”。</p>
+<p class="small">这里读的是以前买过的记录（存在同一个浏览器里）。每件旁边点「加入待购」就加入，来源记为“从已购记录”，加入的仍只有代码、名称、价格三样。</p>
 <div id="historyList"></div>
 <button type="button" class="second" data-go="home">← 返回待购主菜单</button>
 </section>
@@ -117,11 +116,11 @@ async function wAdd(rec){ const db=await openWDB(); const all=await wAll(); if(r
 async function wAll(){ const db=await openWDB(); return new Promise((res,rej)=>{ const rq=db.transaction('wishlist','readonly').objectStore('wishlist').getAll(); rq.onsuccess=()=>res((rq.result||[]).map(normalizeRec)); rq.onerror=()=>rej(rq.error); }); }
 async function wDelete(id){ const db=await openWDB(); return new Promise((res,rej)=>{ const tx=db.transaction('wishlist','readwrite'); tx.objectStore('wishlist').delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
-// 旧记录价格藏在备注「参考价 $X」里，读出为独立 price 字段；新记录直接存 price
+// 旧记录的价格曾存放在附带文字里，读出为独立 price 字段；新记录直接存 price。旧附带文字不再显示。
 function normalizeRec(r){ const o={...r}; if(o.price===undefined||o.price===null||o.price===''){ const m=String(o.note||'').match(/参考价\s*\$\s*([0-9]+(?:\.[0-9]{1,2})?)/); if(m) o.price=m[1]; }
-  o.note=String(o.note||'').replace(/参考价\s*\$\s*[0-9]+(?:\.[0-9]{1,2})?/,'').replace(/数量\s*[0-9]+/,'').split('·').map(s=>s.trim()).filter(Boolean).join(' · ');
-  return o; }
+  o.note=''; return o; }
 function entryDateOf(r){ if(!r.created_at) return ''; if(/^\d{4}-\d{2}-\d{2}/.test(r.created_at)) return r.created_at.slice(0,10); const d=new Date(r.created_at); if(!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); return String(r.created_at); }
+function localNowISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
 function priceNum(r){ const v=parseFloat(r.price); return isNaN(v)?null:v; }
 function clearCurrent(){ confirmItems=[]; $('fileCamera').value=''; $('fileAlbum').value=''; $('ocrStatus').textContent='可以一次选多张，全部识别完会先到下一个页面让你核对，点「确认录入，加入数据库」才保存，不点不存。'; $('confirmRows').innerHTML=''; }
 function showDone(text){ $('doneMsg').textContent=text; show('done'); }
@@ -134,9 +133,9 @@ $('goManual').addEventListener('click',()=>show('manual'));
 $('manualSave').addEventListener('click',async()=>{
   const code=$('mCode').value.trim(), name=$('mName').value.trim();
   if(!code && !name){ alert('请至少填商品名称或代码。'); return; }
-  const r=await wAdd({item_code:code,item_name:name,price:$('mPrice').value.trim(),note:$('mNote').value.trim(),source:'manual',created_at:new Date().toISOString()});
+  const r=await wAdd({item_code:code,item_name:name,price:$('mPrice').value.trim(),source:'manual',created_at:localNowISO()});
   if(r==='dup'){ msg('这个商品已经在待购清单里了。'); await renderQuery(); show('query'); return; }
-  $('mCode').value=$('mName').value=$('mPrice').value=$('mNote').value='';
+  $('mCode').value=$('mName').value=$('mPrice').value='';
   clearCurrent(); showDone('已加入待购清单 ✓ 共 1 件。');
 });
 // 查询（Excel 式表格行）
@@ -166,7 +165,7 @@ async function renderQuery(){
   tbl.innerHTML=`<thead><tr><th>删除</th><th>商品代码</th><th>商品名称</th><th id="priceHead" style="cursor:pointer">价格 ↕</th><th>录入日期</th><th>来源</th></tr></thead>`;
   const tb=document.createElement('tbody');
   rows.forEach(r=>{ const pv=priceNum(r); const tr=document.createElement('tr');
-    tr.innerHTML=`<td><button type="button" class="qdel" title="删除这一条">−</button></td><td>${esc(r.item_code||'无代码')}</td><td class="name">${esc(r.item_name||'（无名称）')}${r.note?'<br><small>备注：'+esc(r.note)+'</small>':''}</td><td>${pv===null?'—':'$'+pv.toFixed(2)}</td><td>${esc(entryDateOf(r))}</td><td>${esc(SRC[r.source]||r.source||'')}</td>`;
+    tr.innerHTML=`<td><button type="button" class="qdel" title="删除这一条">−</button></td><td>${esc(r.item_code||'无代码')}</td><td class="name">${esc(r.item_name||'（无名称）')}</td><td>${pv===null?'—':'$'+pv.toFixed(2)}</td><td>${esc(entryDateOf(r))}</td><td>${esc(SRC[r.source]||r.source||'')}</td>`;
     tr.querySelector('.qdel').addEventListener('click',async()=>{ if(confirm('确定从待购清单删除这一条吗？')){ await wDelete(r.id); renderQuery(); } });
     tb.appendChild(tr); });
   tbl.appendChild(tb); wrap.appendChild(tbl); box.innerHTML=''; box.appendChild(wrap);
@@ -185,26 +184,79 @@ function renderConfirm(){
       <label class="flabel">商品代码</label><input class="field c-code" inputmode="numeric" value="${esc(it.item_code||'')}">
       <label class="flabel">商品名称</label><input class="field c-name" value="${esc(it.item_name||'')}">
       <label class="flabel">目前价格 $</label><input class="field c-price" inputmode="decimal" value="${it.price??''}">
-      <label class="flabel" style="font-weight:400;font-size:16px">备注（选填）</label><input class="field c-note" value="">`;
+`;
     d.querySelector('.rowdel').addEventListener('click',()=>{ syncConfirm(); confirmItems.splice(i,1); renderConfirm(); });
     box.appendChild(d); });
 }
 function syncConfirm(){ document.querySelectorAll('#confirmRows .rec').forEach((d,i)=>{ if(!confirmItems[i])return;
   confirmItems[i].checked=d.querySelector('.c-check').checked; confirmItems[i].item_code=d.querySelector('.c-code').value.trim();
-  confirmItems[i].item_name=d.querySelector('.c-name').value.trim(); confirmItems[i].price=d.querySelector('.c-price').value.trim(); confirmItems[i].note=d.querySelector('.c-note').value.trim(); }); }
+  confirmItems[i].item_name=d.querySelector('.c-name').value.trim(); confirmItems[i].price=d.querySelector('.c-price').value.trim(); }); }
 $('addRowBtn').addEventListener('click',()=>{ syncConfirm(); confirmItems.push({item_code:'',item_name:'',price:'',checked:true}); renderConfirm(); });
 $('confirmSave').addEventListener('click',async()=>{ syncConfirm(); let added=0,dup=0;
   for(const it of confirmItems){ if(!it.checked || (!it.item_code && !it.item_name)) continue;
-    const r=await wAdd({item_code:it.item_code,item_name:it.item_name,price:String(it.price||''),note:it.note||'',source:'photo',created_at:new Date().toISOString()}); r==='dup'?dup++:added++; }
+    const r=await wAdd({item_code:it.item_code,item_name:it.item_name,price:String(it.price||''),source:'photo',created_at:localNowISO()}); r==='dup'?dup++:added++; }
   clearCurrent(); showDone(`已加入待购清单 ✓ 共 ${added} 件`+(dup?`，${dup} 件已经在清单里跳过了。`:'')); });
-// 商品牌兜底：小票解析没出商品时，从识别文字里抓代码/名称/价格三项
-function signFallback(text){
-  const lines=String(text||'').split(/\n/).map(s=>s.trim()).filter(Boolean);
-  let code='', price='', name='';
-  for(const t of lines){ if(!code){ const m=t.match(/\b(\d{5,7})\b/); if(m) code=m[1]; }
-    if(!price){ const m=t.match(/\$?\s*(\d{1,4}\.\d{2})\b/); if(m && !/SUBTOTAL|TOTAL|TAX/i.test(t)) price=m[1]; }
-    if(!/SUBTOTAL|TOTAL|TAX|ENVIRO|DEPOSIT|ITEMS/i.test(t)){ const w=t.replace(/\b\d{5,7}\b/g,' ').replace(/\$?\s*\d{1,4}\.\d{2}\b/g,' ').replace(/\$/g,' ').split(/\s+/).filter(x=>!/^ITEM$/i.test(x)&&!/^COSTCO$/i.test(x)).join(' ').trim(); if(w.replace(/[^A-Za-z]/g,'').length>=3 && w.replace(/[^A-Za-z]/g,'').length>(name?name.replace(/[^A-Za-z]/g,'').length:0)) name=w; } }
-  return (code||name||price)?[{item_code:code,item_name:name,price,checked:true}]:[];
+// 商品牌解析（待购专用）：只抽代码 / 名称 / 项目价格三项，一张牌一件。
+// 价格规则（用户 2026-10-18 拍板）：牌上有打折时只记原始价格，不记折扣金额、也不记折后价。
+// 识别到「负数折扣 + 折后价」结构时，优先取折扣上方印的原价；没印原价时用「折后价 + 折扣金额」算回。
+// 每单位小价（.367 这类小于 1 元）与另收的附加费金额不当作价格；有效期、产地不当作名称主体。
+function signParse(text){
+  const texts=String(text||'').split(/\n/).map(s=>s.trim()).filter(Boolean);
+  if(!texts.length) return [];
+  const norm=s=>s.toUpperCase().replace(/[^A-Z0-9.\-]/g,'');
+  let code='', codeIdx=-1;
+  for(let i=0;i<Math.min(6,texts.length);i++){ if(/^\d{5,7}$/.test(texts[i].trim())){ code=texts[i].trim(); codeIdx=i; break; } }
+  if(!code) for(let i=0;i<Math.min(6,texts.length);i++){ if(/20\d{2}[/\-]/.test(texts[i])) continue; const m=texts[i].match(/\b(\d{5,7})\b/); if(m){ code=m[1]; codeIdx=i; break; } }
+  const cands=[]; let perUnitNext=false;
+  texts.forEach((tx,i)=>{ const n=norm(tx); const isPer=n.includes('PRICEPER'); const isEco=n.includes('ECOFEE')||n.startsWith('+ECO');
+    for(const m of tx.matchAll(/-?\d{1,4}\.\d{2}|-?\.\d{3}\b/g)){ const v=parseFloat(m[0]); if(isNaN(v)) continue;
+      if(isEco) continue; if(v>=0 && v<1) continue; if(/\d+\.\d{2}\s*(kg|lb)/i.test(tx)) continue; if(perUnitNext && !n.includes('SELLPRICE') && v<2) continue;
+      cands.push({i,v,neg:v<0||m[0].startsWith('-'),line:n,savings:false}); }
+    perUnitNext=isPer; });
+  let savings=null, savingsIdx=null, register=null;
+  for(const c of cands){ if(c.line.includes('INSTANTSAVINGS') && !c.neg){ savings=Math.abs(c.v); savingsIdx=c.i; c.savings=true; } else if(c.neg){ savings=Math.abs(c.v); savingsIdx=c.i; c.savings=true; } }
+  for(const c of cands){ if(!c.savings && c.line.includes('PRICEATREGISTER')) register=c.v; }
+  if(register===null && savingsIdx!==null){ const after=cands.filter(c=>!c.savings&&!c.neg&&c.i>savingsIdx); if(cands.some(c=>!c.savings&&c.i<savingsIdx) && after.length) register=after[0].v; }
+  let price=null;
+  if(savings!==null){ const before=cands.filter(c=>!c.savings&&!c.neg&&c.v!==register&&(savingsIdx===null||c.i<savingsIdx));
+    const others=cands.filter(c=>!c.savings&&!c.neg&&c.v!==register);
+    if(before.length) price=before[0].v; else if(others.length) price=others[0].v; else if(register!==null) price=Math.round((register+savings)*100)/100;
+  } else { const sell=cands.filter(c=>c.line.includes('SELLPRICE')); if(sell.length) price=sell[0].v; else if(cands.length) price=Math.max(...cands.map(c=>c.v)); }
+  const stopMarks=['PRODUCTOF','PRICEPER','SELLPRICE','PRICEATREGISTER','INSTANTSAVINGS','ECOFEE','MADEIN'];
+  const nameParts=[]; const startI=codeIdx>=0?codeIdx+1:0;
+  for(let k=startI;k<texts.length;k++){ const tx=texts[k], n=norm(tx);
+    if(stopMarks.some(s=>n.includes(s)) || n.startsWith('PRODUCT')) break;
+    if(n.startsWith('EXP') || /20\d{2}-\d{2}-\d{2}/.test(tx)) break;
+    if(/^[•·●+]/.test(tx.trim())) break;
+    if(/^-?\d{1,4}\.\d{2}$/.test(tx.trim())) break;
+    const cleaned=tx.replace(/\b\d{5,7}\b/g,' ').replace(/-?\d{1,4}\.\d{2}/g,' ').replace(/\$/g,' ').replace(/\s+/g,' ').trim().replace(/^[ .,-]+|[ .,-]+$/g,'');
+    const isWeight=/^\d+(\.\d+)?\s*(kg|lb|g)$/i.test(cleaned);
+    if((cleaned.replace(/[^A-Za-z]/g,'').length>=2) || isWeight) nameParts.push(cleaned);
+    if(isWeight) break; // 重量规格行是名称块的最后一行，其后是价格区
+    if(nameParts.length>=4) break; }
+  const name=nameParts.join(' ');
+  return (code||name||price!==null)?[{item_code:code,item_name:name,price:(price===null?'':price),checked:true}]:[];
+}
+const signFallback=signParse;
+let _paddleOcr=null;
+function signScore(items){ if(!items||!items.length) return -1; const it=items[0]; let s=0; if(it.item_code) s+=40; if(it.price!==''&&it.price!==null&&it.price!==undefined) s+=40; if(it.item_name) s+=Math.min(it.item_name.length,20); if(it.item_name&&it.item_name.length>70) s-=20; return s; }
+async function paddleSignItems(canvas){
+  if(!_paddleOcr){ const mod=await import('https://cdn.jsdelivr.net/npm/@paddleocr/paddleocr-js@0.4.2/+esm'); _paddleOcr=await mod.PaddleOCR.create({lang:'en', ocrVersion:'PP-OCRv5', worker:false, ortOptions:{backend:'wasm'}}); }
+  const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));
+  const [result]=await _paddleOcr.predict(blob);
+  const items=(result&&result.items)?result.items:(Array.isArray(result)?result:[]);
+  const toks=(items||[]).map(it=>{ const poly=it.poly||it.box||[]; let xs=[],ys=[]; if(Array.isArray(poly)) for(const pt of poly){ if(Array.isArray(pt)){ xs.push(pt[0]); ys.push(pt[1]); } }
+    return {text:String(it.text||'').trim(), cx:xs.length?Math.min(...xs):0, cy:ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:0, h:ys.length?(Math.max(...ys)-Math.min(...ys)):20}; }).filter(x=>x.text);
+  toks.sort((a,b)=>a.cy-b.cy||a.cx-b.cx); const lines=[];
+  for(const tk of toks){ const tol=Math.max(15,tk.h*0.6); if(lines.length&&Math.abs(tk.cy-lines[lines.length-1].cy)<=tol) lines[lines.length-1].push(tk); else lines.push([tk]); }
+  const text=lines.map(ln=>[...ln].sort((a,b)=>a.cx-b.cx).map(x=>x.text).join(' ')).join('\n');
+  return signParse(text);
+}
+async function loadScaledCanvas(file){
+  const bmp=await createImageBitmap(file); const target=1200;
+  const scale=bmp.width>target?target/bmp.width:1;
+  const cv=document.createElement('canvas'); cv.width=Math.round(bmp.width*scale); cv.height=Math.round(bmp.height*scale);
+  cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height); return cv;
 }
 async function doOCR(files){
   const list=[...(files||[])].filter(Boolean); if(!list.length) return;
@@ -215,12 +267,21 @@ async function doOCR(files){
       const file=list[idx];
       $('ocrStatus').textContent=`正在识别第 ${idx+1}/${list.length} 张照片…手机上可能要十几秒，请等一下。`;
       let got=null;
+      // 商品牌专用：先把原图等比缩到 1200 宽直接识别（不裁单据区域），再只抽三项
+      let scaledCv=null;
+      try{ scaledCv=await loadScaledCanvas(file); got=await ocrOne(scaledCv); }catch(e){ got=null; }
+      if(got){ let signItems=signParse(got.text);
+        if(signScore(signItems)<70 && scaledCv){ // 代码或价格没认全时，用更强的识别再试一次（第一次要下载模型，会慢一点）
+          $('ocrStatus').textContent='第一次没认全，正在用更强的识别再试一次（第一次会慢一点）…';
+          try{ const pItems=await paddleSignItems(scaledCv); if(signScore(pItems)>signScore(signItems)) signItems=pItems; }catch(e){}
+        }
+        if(signItems.length && signItems[0].price!=='' && (signItems[0].item_code||signItems[0].item_name)){ confirmItems.push(...signItems); continue; } }
       try{ const prep=await preprocessReceipt(file); got=await ocrOne(prep.grayCanvas);
         const good=(got.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee && (it.item_code||it.item_name)).length;
         if(good<1){ const p2=await ocrOne(prep.otsuCanvas); const g2=(p2.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee && (it.item_code||it.item_name)).length; if(g2>good) got=p2; }
       }catch(e){ got=await ocrOne(file); }
-      let items=(got.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee).map(it=>({item_code:it.item_code||'',item_name:it.item_name||'',price:(it.price===''||it.price==null?'':it.price),checked:true}));
-      if(!items.length) items=signFallback(got.text);
+      let items=signParse(got.text);
+      if(!items.length || items[0].price===''){ const mapped=(got.parsed.items||[]).filter(it=>!it.is_discount && !it.is_fee).map(it=>({item_code:it.item_code||'',item_name:it.item_name||'',price:(it.price===''||it.price==null?'':it.price),checked:true})); if(mapped.length) items=mapped; }
       else if(items.length===1 && (!items[0].item_name || /^(ITEM|COSTCO)$/i.test(items[0].item_name.trim()))){ const fb=signFallback(got.text); if(fb.length && fb[0].item_name) items[0].item_name=fb[0].item_name; }
       confirmItems.push(...items);
     }
@@ -230,15 +291,15 @@ async function doOCR(files){
 }
 $('fileCamera').addEventListener('change',e=>doOCR(e.target.files));
 $('fileAlbum').addEventListener('change',e=>doOCR(e.target.files));
-// 从已购记录加入（读小票版 costco-receipts）
+// 从已购记录加入（读同一浏览器里以前买过的记录）
 $('goHistory').addEventListener('click',async()=>{ show('history'); const box=$('historyList'); box.innerHTML='正在读以前买过的记录…';
   try{ const recs=await new Promise((res,rej)=>{ const rq=indexedDB.open('costco-receipts',1); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); })
     .then(db=>new Promise((res,rej)=>{ if(!db.objectStoreNames.contains('receipts')){ res([]); return; } const rq=db.transaction('receipts','readonly').objectStore('receipts').getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }));
     const seen=new Map(); recs.forEach(r=>(r.items||[]).forEach(it=>{ if(it.item_code||it.item_name) seen.set((it.item_code||'')+'|'+(it.item_name||''),it); }));
-    const items=[...seen.values()]; box.innerHTML=items.length?'':'<p class="big">这个浏览器里还没有已入库的小票记录。先去小票首页入库一张，这里就会出现。</p>';
+    const items=[...seen.values()]; box.innerHTML=items.length?'':'<p class="big">这个浏览器里还没有以前买过的记录。先去首页存下一件买过的商品，这里就会出现。</p>';
     items.forEach(it=>{ const d=document.createElement('div'); d.className='rec'; d.innerHTML=`<b>${esc(it.item_name||'')}</b>（${esc(it.item_code||'无代码')}） ${it.price!=null?'$'+esc(it.price):''} `;
       const b=document.createElement('button'); b.className='delbtn'; b.style.color='#0a7a00'; b.style.borderColor='#0a7a00'; b.textContent='加入待购';
-      b.addEventListener('click',async()=>{ const r=await wAdd({item_code:it.item_code||'',item_name:it.item_name||'',price:it.price!=null?String(it.price):'',note:'',source:'history',created_at:new Date().toISOString()}); msg(r==='dup'?'这个商品已经在待购清单里了。':'已加入待购清单 ✓'); });
+      b.addEventListener('click',async()=>{ const r=await wAdd({item_code:it.item_code||'',item_name:it.item_name||'',price:it.price!=null?String(it.price):'',source:'history',created_at:localNowISO()}); msg(r==='dup'?'这个商品已经在待购清单里了。':'已加入待购清单 ✓'); });
       d.appendChild(b); box.appendChild(d); });
   }catch(e){ box.innerHTML='读取已购记录失败：'+esc(e.message||e); }
 });

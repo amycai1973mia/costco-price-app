@@ -252,23 +252,19 @@ def history():
     return render_template("history.html", rows=rows, summary=summary, q=dict(date_from=df, date_to=dt, keyword=kw, code=code), searched=bool(request.args))
 
 # ---------------- 待购清单 ----------------
-# 待购只记三项主体：商品代码 / 商品名称 / 目前价格（参考价格）。价格不设门槛：
-# wishlist 表无价格列，价格以「参考价 $X」拼入 note 保存，查询时解析出来单独成列/筛选/排序。
-# 税、环保费/押金、小计、总额是小票那边的，待购识别与确认页一律不收这些。
+# 待购只记三项：商品代码 / 商品名称 / 项目价格，外加系统生成的录入日期与来源。
+# wishlist 表没有单独的价格列，价格按旧格式存放在 note 里、查询时解析成独立价格列；
+# 旧记录 note 里除价格以外的附带文字不再在待购页面显示，价格解析保持兼容。
 import re as _re
 def _wishlist_price(note):
     m=_re.search(r"参考价\s*\$\s*([0-9]+(?:\.[0-9]{1,2})?)", note or "")
     return float(m.group(1)) if m else None
-def _wishlist_clean_note(note):
-    s=_re.sub(r"参考价\s*\$\s*[0-9]+(?:\.[0-9]{1,2})?", "", note or "")
-    s=_re.sub(r"数量\s*[0-9]+", "", s)
-    return " · ".join(x.strip() for x in s.split("·") if x.strip())
 def _wishlist_enrich(rows):
     out=[]
     for r in rows:
         d=dict(r); pv=_wishlist_price(d.get("note"))
         d["price_value"]=pv; d["price_display"]=(f"${pv:.2f}" if pv is not None else "—")
-        d["clean_note"]=_wishlist_clean_note(d.get("note")); d["entry_date"]=(d.get("created_at") or "")[:10]
+        d["entry_date"]=(d.get("created_at") or "")[:10]
         d["source_label"]={"manual":"手工","history":"从已购记录","photo":"拍照"}.get(d.get("source"), d.get("source") or "")
         out.append(d)
     return out
@@ -278,20 +274,16 @@ def _wishlist_enrich(rows):
 def wishlist():
     return render_template("wishlist.html")
 
-def _wishlist_note_with_price_note(form):
-    # 价格只是目前价格/参考价格（拼进备注显示与解析），不是期望价格门槛。
-    note = (form.get("note", "") or "").strip()
+def _wishlist_note_with_price(form):
+    # 只把项目价格按旧格式写入 note 供查询解析；忽略任何附带文字，不再拼接其他内容。
     price = (form.get("item_price", "") or "").strip()
-    parts = []
-    if price: parts.append(f"参考价 ${price}")
-    if note: parts.append(note)
-    return " · ".join(parts)
+    return f"参考价 ${price}" if price else ""
 
 @app.route("/wishlist/add", methods=["POST"])
 @login_required
 def wishlist_add():
     code = request.form.get("item_code", "").strip(); name = request.form.get("item_name", "").strip()
-    source = request.form.get("source", "manual"); note = _wishlist_note_with_price_note(request.form)
+    source = request.form.get("source", "manual"); note = _wishlist_note_with_price(request.form)
     src_item = request.form.get("source_receipt_item_id") or None
     if source not in ("manual", "history", "photo"): source = "manual"
     if not code and not name: flash("请至少填商品名称或代码。"); return redirect(url_for("wishlist_manual" if source=="manual" else "wishlist"))
@@ -360,14 +352,14 @@ def wishlist_query():
 @login_required
 def wishlist_photo_confirm_add():
     codes = request.form.getlist("item_code"); names = request.form.getlist("item_name")
-    prices = request.form.getlist("item_price"); notes = request.form.getlist("item_note")
+    prices = request.form.getlist("item_price")
     selected = set(request.form.getlist("selected"))
     con = db(); added = 0; skipped = 0
     for i in range(max(len(codes), len(names))):
         if selected and str(i) not in selected: continue
         code = codes[i].strip() if i < len(codes) else ""; name = names[i].strip() if i < len(names) else ""
         if not code and not name: continue
-        note = _wishlist_note_with_price_note({"item_price": prices[i] if i < len(prices) else "", "note": notes[i] if i < len(notes) else ""})
+        note = _wishlist_note_with_price({"item_price": prices[i] if i < len(prices) else ""})
         try:
             con.execute("INSERT INTO wishlist(user_id,item_code,item_name,note,source) VALUES(?,?,?,?, 'photo')",
                         (session["user_id"], code, name, note)); added += 1
@@ -386,24 +378,90 @@ def wishlist_delete(wid):
     return redirect(url_for("wishlist_query", **keep))
 
 def _sign_items_from_raw(raw_lines):
-    """商品牌兜底：小票解析没出商品时，从原始行里抓 代码/名称/价格 三项各一份，组成一件。
-    只抓三项，税/环保费/押金/总额等词所在行不作名称。"""
+    """商品牌解析（待购专用）：只抽代码 / 名称 / 项目价格三项，一张牌一件。
+    价格规则（用户 2026-10-18 拍板）：牌上有打折时只记原始价格，
+    不记折扣金额、也不记折后价。识别到「负数折扣 + 折后价」结构时，
+    优先取折扣上方印的原价；没有印原价时用「折后价 + 折扣金额」算回原价。
+    每单位小价（牌面 .367 这类三位小数/小于 1 元）与另收的附加费金额不当作价格；
+    有效期、产地、规格说明不当作名称主体（规格重量行可跟在名称后）。"""
     texts=[(l.get("text") if isinstance(l, dict) else str(l) or "").strip() for l in (raw_lines or [])]
-    texts=[t for t in texts if t]
+    texts=[x for x in texts if x]
     if not texts: return []
-    code=""; price=None; name_parts=[]
-    for t in texts:
-        if not code:
-            m=_re.search(r"\b(\d{5,7})\b", t)
-            if m: code=m.group(1)
-        if price is None:
-            m=_re.search(r"\$?\s*(\d{1,4}\.\d{2})\b", t)
-            if m and not _re.search(r"SUBTOTAL|TOTAL|TAX", t, _re.I): price=float(m.group(1))
-        if _re.search(r"SUBTOTAL|TOTAL|TAX|ENVIRO|DEPOSIT|ITEMS\s*SOLD", t, _re.I): continue
-        words=_re.sub(r"\b\d{5,7}\b", " ", t); words=_re.sub(r"\$?\s*\d{1,4}\.\d{2}\b", " ", words)
-        words=" ".join(w for w in words.replace("$"," ").split() if w.upper() not in ("ITEM","COSTCO"))
-        if len(_re.sub(r"[^A-Za-z]", "", words))>=3: name_parts.append(words)
-    name=max(name_parts, key=lambda s: len(_re.sub(r"[^A-Za-z]", "", s))) if name_parts else ""
+    def norm(s): return _re.sub(r"[^A-Z0-9.\-]", "", s.upper())
+    # 代码：优先第一行纯 5-7 位数字（牌面顶部），避开日期行
+    code=""; code_idx=-1
+    for i,tx in enumerate(texts[:6]):
+        s=tx.strip()
+        if _re.fullmatch(r"\d{5,7}", s): code, code_idx = s, i; break
+    if not code:
+        for i,tx in enumerate(texts[:6]):
+            if _re.search(r"20\d{2}[/\-]", tx): continue
+            m=_re.search(r"\b(\d{5,7})\b", tx)
+            if m: code, code_idx = m.group(1), i; break
+    # 价格候选
+    cands=[]  # (idx, value, is_negative, norm_line)
+    per_unit_next=False
+    for i,tx in enumerate(texts):
+        n=norm(tx)
+        is_per_line = "PRICEPER" in n
+        is_eco_line = "ECOFEE" in n or n.startswith("+ECO")
+        for m in _re.finditer(r"-?\d{1,4}\.\d{2}|-?\.\d{3}\b", tx):
+            try: v=float(m.group(0))
+            except ValueError: continue
+            if is_eco_line: continue
+            if _re.search(r"\d+\.\d{2}\s*(kg|lb)", tx, _re.I): continue  # 重量行上的数不是价格
+            if 0 <= v < 1: continue  # 每单位小价 .367/.333/.833 等（负数是折扣金额，不能在此丢掉）
+            if per_unit_next and "SELLPRICE" not in n and v < 2: continue
+            cands.append({"i":i,"v":v,"neg":v<0 or m.group(0).startswith("-"),"line":n,"text":tx})
+        per_unit_next = is_per_line
+    savings=None; savings_idx=None; register=None
+    for c in cands:
+        if "INSTANTSAVINGS" in c["line"] and not c["neg"]:
+            # 同行折扣金额被 OCR 丢了负号时，这笔按折扣金额处理，不作价格
+            savings=abs(c["v"]); savings_idx=c["i"]; c["is_savings"]=True
+        elif c["neg"]:
+            savings=abs(c["v"]); savings_idx=c["i"]; c["is_savings"]=True
+    for c in cands:
+        if c.get("is_savings"): continue
+        if "PRICEATREGISTER" in c["line"]: register=c["v"]
+    if register is None and savings_idx is not None:
+        after=[c for c in cands if not c.get("is_savings") and not c["neg"] and c["i"]>savings_idx]
+        # 折后价通常紧跟在折扣之后且为牌面大价；取折扣后第一个非原价候选需与原价区分：
+        # 若折扣行之前已有候选（原价），折扣后第一个即折后价
+        if any(c["i"]<savings_idx for c in cands if not c.get("is_savings")) and after: register=after[0]["v"]
+    price=None
+    if savings is not None:
+        before=[c for c in cands if not c.get("is_savings") and not c["neg"] and c["v"]!=register and (savings_idx is None or c["i"]<savings_idx)]
+        after_orig=[c for c in cands if not c.get("is_savings") and not c["neg"] and c["v"]!=register]
+        if before: price=before[0]["v"]
+        elif after_orig: price=after_orig[0]["v"]
+        elif register is not None: price=round(register+savings,2)
+    else:
+        sell=[c for c in cands if "SELLPRICE" in c["line"]]
+        if sell: price=sell[0]["v"]
+        elif cands: price=max(c["v"] for c in cands)
+    # 名称：代码下一行起连续取，直到说明/价格栏目行为止
+    stop_marks=("PRODUCTOF","PRICEPER","SELLPRICE","PRICEATREGISTER","INSTANTSAVINGS","ECOFEE","MADEIN")
+    name_parts=[]
+    start_i = code_idx+1 if code_idx>=0 else 0
+    for tx in texts[start_i:]:
+        n=norm(tx); raw=tx.strip()
+        if any(k in n for k in stop_marks) or n.startswith("PRODUCT"): break
+        if n.startswith("EXP") or _re.search(r"20\d{2}-\d{2}-\d{2}", raw): break
+        if raw.startswith(("•","·","●","+")): break
+        if _re.fullmatch(r"-?\d{1,4}\.\d{2}", raw): break
+        cleaned=_re.sub(r"\b\d{5,7}\b", " ", raw); cleaned=_re.sub(r"-?\d{1,4}\.\d{2}", " ", cleaned)
+        cleaned=" ".join(cleaned.replace("$"," ").split()).strip(" .,-")
+        _is_weight = bool(_re.fullmatch(r"\d+(\.\d+)?\s*(kg|lb|g)", cleaned, _re.I))
+        if len(_re.sub(r"[^A-Za-z]", "", cleaned))>=2 or _is_weight:
+            name_parts.append(cleaned)
+        if _is_weight: break  # 重量规格行是名称块最后一行，其后是价格区
+        if len(name_parts)>=4: break
+    name=" ".join(name_parts)
+    try:
+        from ocr_parser import clean_name
+        name=clean_name(name)[0]
+    except Exception: pass
     if code or name or price is not None:
         return [{"item_code":code, "item_name":name, "price":("" if price is None else price)}]
     return []
@@ -418,15 +476,28 @@ def wishlist_photo():
     if not files: flash("请先选照片。"); return redirect(url_for("wishlist"))
     items=[]; failed=0
     try:
-        from ocr_parser import recognize
+        from ocr_parser import recognize, ocr_sign_lines
         for f in files:
             rid = uuid.uuid4().hex[:12]; dest = UPLOADS / f"wish{rid}.jpg"; f.save(dest)
             try:
+                # 待购拍的是商品牌：先走商品牌专用识别（缩图 OCR + 只抽三项 + 打折取原价）
+                got=[]
+                try: got=_sign_items_from_raw(ocr_sign_lines(str(dest)))
+                except Exception: got=[]
+                if got:
+                    # 1600 宽名称分词偶尔更好（价格仍以 1200 为准）：名称词数更多时借用其名称
+                    try:
+                        alt=_sign_items_from_raw(ocr_sign_lines(str(dest), width=1600))
+                        if alt and alt[0].get("item_code")==got[0].get("item_code") and len((alt[0].get("item_name") or "").split())>len((got[0].get("item_name") or "").split()):
+                            got[0]["item_name"]=alt[0]["item_name"]
+                    except Exception: pass
+                if got and (got[0].get("item_code") or got[0].get("item_name")) and got[0].get("price") not in ("", None):
+                    items.extend(got); continue
                 result=recognize(str(dest), str(PENDING / rid))
                 got=[{"item_code":it.get("item_code",""), "item_name":it.get("item_name",""), "price":it.get("price","")}
                      for it in result.get("items", []) if not it.get("is_discount") and not it.get("is_fee")]
                 if not got:
-                    # 商品牌不是小票：小票预处理会裁掉牌子边缘/大字价格，故兜底改为对原图直认再抓三项
+                    # 商品牌不是整张单据：预处理可能裁掉牌子边缘/大字价格，故兜底改为对原图直认再只抓三项
                     try:
                         from ocr_parser import ocr_lines as _ol
                         got=_sign_items_from_raw(_ol(str(dest)))

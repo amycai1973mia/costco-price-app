@@ -1,9 +1,9 @@
-{% extends "base.html" %}{% block body %}
+{% extends "base.html" %}{% block title %}待购清单 — Costco 助手{% endblock %}{% block body %}
 <h1>🛒 待购清单</h1>
 <p class="big">未来想买、等打折再买的东西放这里。它一出现在打折名单上就会提醒你（不设价格门槛）。</p>
 
 <h2>第一行：拍照或从相册选照片识别</h2>
-<p class="hint">拍的是 Costco 商品牌（价格牌），只认三样：<b>商品代码、商品名称、目前的价格</b>。税、环保费这些不往待购里放，那是小票那边的。</p>
+<p class="hint">拍的是 Costco 商品牌（价格牌），待购只认三样：<b>商品代码、商品名称、目前的价格</b>，没有别的栏目。</p>
 <form method="post" action="/wishlist/photo" enctype="multipart/form-data">
   <label class="upload-btn" style="background:#0a7a42">📷 拍照（打开相机，拍商品牌）<input type="file" name="photos" accept="image/*" capture="environment"></label>
   <label class="upload-btn" style="background:#005daa">🖼 从相册选照片（可以一次选多张）<input type="file" name="photos" accept="image/*" multiple></label>

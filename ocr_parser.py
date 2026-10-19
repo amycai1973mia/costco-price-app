@@ -416,3 +416,20 @@ def recognize(src, work_dir):
             return parsed
     parsed["processed_image"]=processed
     return parsed
+
+
+def ocr_sign_lines(image_path, width=1200):
+    """商品牌专用 OCR 行：原图常为 4000px 宽，大字价格会被 RapidOCR 漏读；
+    先等比缩到约 1200 宽再识别（实测三张门店价格牌均靠此读全）。失败时退回原图。
+    width=1600 时名称分词有时更好、但大字价格易被拆碎，只作名称参考，不作价格依据。"""
+    try:
+        img = cv2.imread(str(image_path))
+        if img is None: return ocr_lines(image_path)
+        h, w = img.shape[:2]
+        if w <= width+100: return ocr_lines(image_path)
+        scaled = cv2.resize(img, (width, int(h*width/w)))
+        tmp = Path("/tmp") / (Path(str(image_path)).stem + f"_sign{width}.jpg")
+        cv2.imwrite(str(tmp), scaled)
+        return ocr_lines(str(tmp))
+    except Exception:
+        return ocr_lines(image_path)

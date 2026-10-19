@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block body %}
+{% extends "base.html" %}{% block title %}待购清单 — Costco 助手{% endblock %}{% block body %}
 <style>
 .qwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #ccc;border-radius:10px}
 table.qtable{border-collapse:collapse;min-width:640px;width:100%}
@@ -37,7 +37,7 @@ table.qtable td.name{white-space:normal;min-width:150px}
 <tr>
   <td><form method="post" action="/wishlist/{{ r.id }}/delete" onsubmit="return confirm('确定从待购清单删除这一条吗？')">{% for k in ['q','name','code','date_from','date_to','price_min','price_max','sort'] %}{% if qa[k] %}<input type="hidden" name="{{ k }}" value="{{ qa[k] }}">{% endif %}{% endfor %}<button class="delbtn" type="submit" title="删除这一条">−</button></form></td>
   <td>{{ r.item_code or '无代码' }}</td>
-  <td class="name">{{ r.item_name or '（无名称）' }}{% if r.clean_note %}<br><small>备注：{{ r.clean_note }}</small>{% endif %}</td>
+  <td class="name">{{ r.item_name or '（无名称）' }}</td>
   <td>{{ r.price_display }}</td>
   <td>{{ r.entry_date }}</td>
   <td>{{ r.source_label }}</td>

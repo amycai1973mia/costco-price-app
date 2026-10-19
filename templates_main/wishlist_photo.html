@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block body %}
+{% extends "base.html" %}{% block title %}待购清单 — Costco 助手{% endblock %}{% block body %}
 <h1>核对识别到的商品</h1>
 {% if items %}<p class="big" style="background:#fff8db;border:2px solid #e67700;border-radius:12px;padding:14px">共识别到 {{ items|length }} 件，请核对{% if photo_count %}（这次共 {{ photo_count }} 张照片）{% endif %}。只核对三样：商品代码、商品名称、目前的价格，改对了再点最下面的按钮。</p>{% endif %}
 <p class="hint">不要的点小 ✕ 删掉这一行，也可以手工加一行。没点「确认录入，加入数据库」之前，不会入库。</p>
@@ -11,7 +11,6 @@
   <label>商品代码 <input name="item_code" inputmode="numeric" value="{{ it.item_code }}"></label>
   <label>商品名称 <input name="item_name" value="{{ it.item_name }}"></label>
   <label>目前价格 $ <input name="item_price" inputmode="decimal" value="{{ it.price if it.price is not none else '' }}"></label>
-  <label style="font-weight:400;font-size:17px">备注（选填）<input name="item_note" value=""></label>
 </div>
 {% else %}<p class="big">没识别出商品，可以点下面「＋ 手工加一行」，或回去用手工录入。</p>{% endfor %}
 </div>
@@ -31,7 +30,7 @@ document.getElementById('addRow').addEventListener('click',()=>{
     +'<label>商品代码 <input name="item_code" inputmode="numeric" value=""></label>'
     +'<label>商品名称 <input name="item_name" value=""></label>'
     +'<label>目前价格 $ <input name="item_price" inputmode="decimal" value=""></label>'
-    +'<label style="font-weight:400;font-size:17px">备注（选填）<input name="item_note" value=""></label>';
+';
   bindDel(d.querySelector('.row-del')); document.getElementById('rows').appendChild(d); renumber();
 });
 </script>

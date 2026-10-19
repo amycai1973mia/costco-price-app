@@ -34,17 +34,29 @@ try:
     manual = c.get("/wishlist/manual").get_data(as_text=True)
     assert 'name="item_code"' in manual and 'name="item_name"' in manual and 'name="item_price"' in manual
     assert 'name="item_quantity"' not in manual, "数量字段本轮应去掉"
-    assert "目前价格" in manual and "不是期望价格" in manual and "备注（选填" in manual
-    assert "税" not in manual.split("目前价格")[0][-200:]  # 不把税等混进主体说明（宽松检查不做硬断言）
+    assert "目前价格" in manual and "不是期望价格" in manual
+    # 本轮清查：待购全流程只许代码/名称/价格三项(+录入日期/来源)，逐页查混入词
+    BAD=["商店","门店","购买日期","税","环保费","押金","小计","总计","件数","会员","结账","小票","备注","数量","store_code","purchase_date"]
+    for path,body in [("入口",entry),("手工页",manual),("完成页",done if False else c.get("/wishlist/done?added=1").get_data(as_text=True)),("查询页",c.get("/wishlist/query").get_data(as_text=True))]:
+        # 渲染页含全局导航(去往其他模块的链接文字不在待购字段范围内)，故字段混入以模板文件为准另查；此处查页面主体字段词
+        for w in ["商店名称","购买日期","环保费","押金","小计","总计"]:
+            assert w not in body, f"{path}混入{w}"
+    import pathlib as _pl
+    for f in _pl.Path(BASE/"templates_main").glob("wishlist*.html"):
+        txt=f.read_text()
+        for w in BAD: assert w not in txt, f"{f.name}混入{w}"
+    assert 'name="note"' not in manual and "item_note" not in c.get("/wishlist/manual").get_data(as_text=True)
+    print("PASS 2b 待购模板逐页清查：无商店/购买日期/税费/小计等混入词，无备注栏目")
     assert sql("SELECT COUNT(*) c FROM wishlist WHERE user_id=?", (uid,))[0]["c"] == 0
     # 加三件不同价格便于查询/排序
     for code,name,price in [("777001","TEST手工待购","12.99"),("777002","TEST苹果待购","5.49"),("777003","TEST燕麦待购","20.00")]:
-        r=c.post("/wishlist/add", data={"item_code":code,"item_name":name,"item_price":price,"note":"等打折","source":"manual"}, follow_redirects=True)
+        r=c.post("/wishlist/add", data={"item_code":code,"item_name":name,"item_price":price,"note":"等打折","source":"manual"}, follow_redirects=True)  # note 参数应被忽略，只存价格
     rows = sql("SELECT * FROM wishlist WHERE user_id=? AND is_active=1 ORDER BY id", (uid,))
     assert len(rows)==3 and all(x["source"]=="manual" for x in rows) and "12.99" in rows[0]["note"]
     done = c.get("/wishlist/done?added=1").get_data(as_text=True)
     assert "已加入待购清单" in done and "返回主菜单" in done and 'href="/wishlist"' in done
-    print("PASS 2 手工只三项(+选填备注)点确认才入库，完成页有返回主菜单；价格为目前/参考价拼备注非门槛")
+    print("PASS 2 手工只三项点确认才入库，完成页有返回主菜单；价格为目前/参考价、内部存入note供解析非门槛，附带文字不拼接")
+    assert "等打折" not in rows[0]["note"], "附带文字不应被拼进待购记录"
     # 3 Excel 查询 + 多条件
     q = c.get("/wishlist/query").get_data(as_text=True)
     assert '<table class="qtable">' in q and 'class="record"' not in q, "应为Excel表格不是卡片"
@@ -93,6 +105,30 @@ try:
         after = sql("SELECT COUNT(*) c FROM wishlist WHERE user_id=? AND is_active=1", (uid,))[0]["c"]
         assert after==before==0, f"识别到确认页未点确认不应入库 {before}->{after}"
         print(f"PASS 6 多选2张样本图识别列出三项到确认页（含1694477系），未点确认库不变 {before}->{after}")
+    # 6 商品牌解析单元：三张真值结构 + 打折取原价
+    from app_main import _sign_items_from_raw as _sign
+    def _L(txt): return [{"text":x} for x in txt.split("\n")]
+    _cases=[
+      ("49118\nGALA APPLES\nPRODUCT OF CANADA\nPRICE PER 100 GRAMS\n.367\nSELL PRICE 9.99","49118","GALA APPLES",9.99),
+      ("2322011\nKIRKLAND SIGNATURE\nAAA BATTERIES\nPACK OF 48\nMade in U.S.A.\nPRICE PER BATTERY .333\nSELL PRICE 15.99\n+ECO FEE 1.92","2322011","KIRKLAND SIGNATURE AAA BATTERIES PACK OF 48",15.99),
+      ("1874356\nPURAVIDA FIRE ROASTED\nROOT VEGETABLES\n1.8 kg\n18.99\nInstant Savings -4.00\nEXP. 2026-10-25\nPRICE AT REGISTER 14.99","1874356","PURAVIDA FIRE ROASTED ROOT VEGETABLES 1.8 kg",18.99),
+      ("1874356\nPURAVIDA\nInstant Savings -4.00\nPRICE AT REGISTER 14.99","1874356","PURAVIDA",18.99),
+    ]
+    for txt,code,name,price in _cases:
+        r=_sign(_L(txt)); assert r and r[0]["item_code"]==code and r[0]["item_name"]==name and float(r[0]["price"])==price, (txt,r)
+    print("PASS 6 商品牌解析单元4例：每单位小价/附加费不误作价格，打折只取原价(印原价优先、无原价时折后价+折扣)")
+    if "--signs" in sys.argv:
+        import pathlib as _pl2
+        _base=_pl2.Path("/home/box/agent-data/agents/83703a29-e0bb-4518-9c8a-29cb79892d9e/attachments")
+        _real=[("d66f043e5c60eac7d176f956c4b9a2abac2d32b7b00cc5a33dc4cefea7bd3e8e.jpg","49118","GALA APPLES","9.99"),
+               ("15dcb4d8331f4eb933c856deb4e83937db6637d0da3f2b3f49e0b156c7874a41.jpg","2322011",None,"15.99"),
+               ("31352070e0e207e145d21bb3199b3c1d8ea89f1736d0dab3505bd118ec3af2e4.jpg","1874356",None,"18.99")]
+        for fn,code,name,price in _real:
+            with open(_base/fn,"rb") as fh: rr=c.post("/wishlist/photo", data={"photos":[(fh,fn)]}, content_type="multipart/form-data")
+            bb=rr.get_data(as_text=True)
+            assert f'value="{code}"' in bb and f'value="{price}"' in bb, (fn,bb[:1200])
+            if name: assert f'value="{name}"' in bb, (fn,bb[:1200])
+        print("PASS 7 三张真实门店价格牌 Flask 识别：代码/价格逐张对真值(名称见 TEST_RESULTS 记录59 的粘连说明)")
     print("ALL PASS (test_wishlist)")
 finally:
     cleanup(); print("已清理 TEST 待购用户数据。")
