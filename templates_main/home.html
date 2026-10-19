@@ -1,13 +1,8 @@
 {% extends "base.html" %}{% block body %}
 <h1>Costco 小票助手</h1>
 <p class="big">你已入库 {{ stats.receipts }} 张小票 · 待购 {{ stats.wishlist }} 件 · 未读提醒 {{ stats.alerts }} 条</p>
-<h2>第 1 步：录入小票</h2>
-<form method="post" action="/receipts/upload" enctype="multipart/form-data">
-<label class="upload-btn">📷 拍小票 / 选照片<input type="file" name="receipt" accept="image/*" onchange="this.form.submit()"></label>
-</form>
-<a class="second-btn" href="/receipts/manual">✍️ 没有照片？手工录入一张小票</a>
-<a class="second-btn" href="/receipts">🧾 看我的小票</a>
-<a class="second-btn" href="/history">🔍 查询以前买过的商品</a>
-<a class="second-btn" href="/wishlist">🛒 我的待购清单（等打折再买）</a>
+<a class="second-btn" href="/receipts/new">🧾 已买小票（录入 / 查询）</a>
+<a class="second-btn" href="/wishlist">🛒 待购清单（等打折再买）</a>
 <a class="second-btn" href="/alerts">🔔 我的提醒</a>
+{% if me.role=='admin' %}<a class="second-btn" href="/admin">⚙️ 运营后台</a>{% endif %}
 {% endblock %}

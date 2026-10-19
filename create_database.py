@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS receipts (
     tax REAL NOT NULL DEFAULT 0,
     total REAL,
     item_count INTEGER,
+    invoice_no TEXT,                  -- 发票/交易号（如小票可得，防重判重用）
     image_path TEXT,
     source TEXT NOT NULL DEFAULT 'receipt_scan',
     imported_at TEXT NOT NULL DEFAULT (datetime('now')),

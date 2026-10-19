@@ -163,6 +163,8 @@ input.field.f-fee-amount{font-size:17px;padding:5px 6px;min-height:36px;border-w
   <p class="small">这里能看到您点过「确认无误，入库」的小票。没入库的识别结果，刷新页面就没了，不会保存。</p>
   <button id="refreshRecords">查看已入库记录</button>
   <div id="records"></div>
+  <button id="exportRecords" type="button">⬇ 导出已入库记录（给正式库导入）</button>
+  <p class="small">导出的文件可以在正式版「已买小票」页里导入正式数据库，重复的小票会自动跳过。这版数据先存在本机，不导出不会自动进正式库。</p>
   <button id="clearRecords" class="clearbtn">清空全部已入库记录</button>
 </div>
 <p class="small">网页试用版：浏览器本地 OCR（Tesseract.js）+ Costco 固定版式解析。识别引擎和电脑本地版（RapidOCR）不同，效果可能有差别，以人工核对为准。</p>
@@ -654,6 +656,12 @@ $('saveBtn').addEventListener('click',async()=>{
       $('saveMsg').scrollIntoView({behavior:'smooth',block:'center'}); return;
     }
   }
+  // 防重：门店+日期+总计和已入库的一张一样时，先提醒，不静默重复入
+  try{
+    const existing=await idbAll();
+    const dup=existing.find(x=>String(x.store_code||'')===String(rec.store_code||'') && String(x.purchase_date||'')===String(rec.purchase_date||'') && rec.total!==null && x.total!==null && Math.abs(Number(x.total)-Number(rec.total))<0.005 && Number(x.item_count||0)===Number(rec.item_count||0));
+    if(dup && !confirm('这张小票可能已经入过库了（'+(rec.purchase_date||'日期没填')+' · 门店 '+(rec.store_code||'—')+' · 总计 $'+Number(rec.total).toFixed(2)+'）。\n\n如果确实是同一张，请点「取消」不要重复入；如果确实是两张一样的，请点「确定」照样入库。')){ $('saveMsg').style.display='block'; $('saveMsg').textContent='已取消：没有重复入库。'; return; }
+  }catch(e){ /* 查防重失败不挡正常入库 */ }
   try{
     await idbAdd(rec);
     const cnt=rec.item_count;
@@ -666,6 +674,12 @@ $('saveBtn').addEventListener('click',async()=>{
   }catch(e){ $('saveMsg').style.display='block'; $('saveMsg').textContent='入库失败：'+(e&&e.message?e.message:e); }
 });
 $('refreshRecords').addEventListener('click',renderRecords);
+const _exp=$('exportRecords'); if(_exp) _exp.addEventListener('click',async()=>{
+  const all=await idbAll();
+  if(!all.length){ alert('还没有已入库记录可以导出。'); return; }
+  const blob=new Blob([JSON.stringify({app:'costco-price-app',kind:'receipts',version:1,exported_at:new Date().toISOString(),receipts:all},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='costco-receipts-export.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
 $('clearRecords').addEventListener('click',async()=>{ if(confirm('确定要清空全部已入库记录吗？清了就找不回来。')){ await idbClear(); renderRecords(); } });
 renderRecords();
 

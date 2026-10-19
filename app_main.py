@@ -39,6 +39,10 @@ def init_db():
     # 复用建库脚本的 SCHEMA，保证结构与 create_database.py 一致
     import create_database
     con = db(); con.executescript(create_database.SCHEMA); con.commit()
+    # 已有库补列（新结构已含时跳过）：receipts.invoice_no 防重用
+    _cols = [r[1] for r in con.execute("PRAGMA table_info(receipts)").fetchall()]
+    if _cols and "invoice_no" not in _cols:
+        con.execute("ALTER TABLE receipts ADD COLUMN invoice_no TEXT"); con.commit()
     # 环境变量初始化管理员（仅当库中无 admin 时）
     email = os.environ.get("COSTCO_ADMIN_EMAIL"); pw = os.environ.get("COSTCO_ADMIN_PASSWORD")
     if email and pw and not con.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
@@ -133,21 +137,64 @@ def home():
     return render_template("home.html", stats=stats)
 
 # ---------------- 小票：识别确认入库 / 手工录入 ----------------
+def _same_receipt_item(a, b):
+    if not a.get("item_code") or a.get("item_code") != b.get("item_code"): return False
+    try: return abs(float(a.get("price")) - float(b.get("price"))) <= 0.011
+    except (TypeError, ValueError): return (a.get("item_name") or "") == (b.get("item_name") or "")
+
+def merge_receipt_parts(parts):
+    """多张分段小票合并：头部（门店/日期/小计）取第一张有值的，底部（总计/税/件数）取最后一张有值的；
+    接缝重叠段（代码+价格连续一致）只保留一份。单张时原样返回。"""
+    parts = [p for p in parts if p]
+    if len(parts) <= 1: return parts[0] if parts else {"items": []}
+    merged_items = []
+    for part in parts:
+        items = [it for it in part.get("items", []) if not it.get("is_discount")]
+        overlap = 0
+        for k in range(min(len(merged_items), len(items)), 0, -1):
+            if all(_same_receipt_item(merged_items[-k + i], items[i]) for i in range(k)): overlap = k; break
+        merged_items.extend(items[overlap:])
+    def first(key):
+        for p in parts:
+            if p.get(key) not in (None, ""): return p.get(key)
+        return ""
+    def last(key):
+        for p in reversed(parts):
+            if p.get(key) not in (None, ""): return p.get(key)
+        return None
+    out = dict(parts[0])
+    out.update({"store_code": first("store_code"), "purchase_date": first("purchase_date"),
+                "subtotal": first("subtotal"), "total": last("total"), "tax": last("tax"),
+                "fees_total": round(sum(float(it.get("enviro_fee") or 0) + float(it.get("deposit") or 0) for it in merged_items), 2),
+                "items": merged_items, "expected_item_count": last("expected_item_count"),
+                "product_count": len(merged_items), "photo_count": len(parts),
+                "raw_lines": sum((p.get("raw_lines") or [] for p in parts), [])})
+    return out
+
+@app.route("/receipts/new")
+@login_required
+def receipts_new():
+    return render_template("receipts_new.html")
+
 @app.route("/receipts/upload", methods=["POST"])
 @login_required
 def receipt_upload():
-    f = request.files.get("receipt")
-    if not f or not f.filename: flash("请先选一张小票照片。"); return redirect(url_for("home"))
+    files = [f for f in request.files.getlist("receipt") if f and f.filename]
+    if not files: flash("请先选小票照片。"); return redirect(url_for("receipts_new"))
     rid = uuid.uuid4().hex[:12]
-    ext = Path(f.filename).suffix.lower(); ext = ext if ext in (".jpg", ".jpeg", ".png", ".webp") else ".jpg"
-    dest = UPLOADS / f"{rid}{ext}"; f.save(dest)
-    parsed = {"store_code": "", "purchase_date": "", "total": None, "subtotal": None, "tax": None, "items": [], "raw_lines": []}
+    parts = []; first_image = ""
     try:
         from ocr_parser import recognize
-        parsed = recognize(str(dest), str(PENDING / rid))
+        for idx, f in enumerate(files):
+            ext = Path(f.filename).suffix.lower(); ext = ext if ext in (".jpg", ".jpeg", ".png", ".webp") else ".jpg"
+            dest = UPLOADS / f"{rid}_{idx}{ext}"; f.save(dest)
+            if not first_image: first_image = dest.name
+            try: parts.append(recognize(str(dest), str(PENDING / f"{rid}_{idx}")))
+            except Exception as e: parts.append({"store_code": "", "purchase_date": "", "total": None, "subtotal": None, "tax": None, "items": [], "raw_lines": [], "error": str(e)})
     except Exception as e:
-        parsed["error"] = str(e)
-    parsed["receipt_key"] = rid; parsed["image_name"] = dest.name; parsed["owner"] = session["user_id"]
+        parts = [{"store_code": "", "purchase_date": "", "total": None, "subtotal": None, "tax": None, "items": [], "raw_lines": [], "error": str(e)}]
+    parsed = merge_receipt_parts(parts)
+    parsed["receipt_key"] = rid; parsed["image_name"] = first_image; parsed["owner"] = session["user_id"]
     (PENDING / f"{rid}.json").write_text(json.dumps(parsed, ensure_ascii=False), encoding="utf-8")
     return redirect(url_for("receipt_confirm", rid=rid))
 
@@ -156,7 +203,7 @@ def receipt_upload():
 def receipt_manual():
     rid = "manual" + uuid.uuid4().hex[:8]
     data = {"receipt_key": rid, "image_name": "", "store_code": "", "purchase_date": date.today().isoformat(),
-            "subtotal": "", "fees_total": "", "tax": "", "total": "", "items": [], "owner": session["user_id"], "manual": True}
+            "subtotal": "", "fees_total": "", "tax": "", "total": "", "invoice_no": "", "items": [], "owner": session["user_id"], "manual": True}
     (PENDING / f"{rid}.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     return redirect(url_for("receipt_confirm", rid=rid))
 
@@ -198,19 +245,101 @@ def receipt_save(rid):
     fees_total = fnum(fees_in) if fees_in else round(fees_total, 2)
     tax = fnum(request.form.get("tax")); total_in = request.form.get("total", "").strip()
     total = fnum(total_in) if total_in else round(subtotal + fees_total + tax, 2)
+    store_code = request.form.get("store_code", "").strip()
+    purchase_date = norm_date(request.form.get("purchase_date", ""))
+    invoice_no = request.form.get("invoice_no", "").strip()
     con = db()
-    cur = con.execute("""INSERT INTO receipts(user_id,store_code,purchase_date,subtotal,fees_total,tax,total,item_count,image_path,source)
-                         VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                      (session["user_id"], request.form.get("store_code", "").strip(), norm_date(request.form.get("purchase_date", "")),
-                       subtotal, fees_total, tax, total, len(items), data.get("image_name", ""), "manual" if data.get("manual") else "receipt_scan"))
+    # 防重：同一用户、门店+日期+总计相同（有发票号时再对发票号）视为可能重复，先提示、不静默重复入
+    if not request.form.get("confirm_duplicate"):
+        dup = None
+        if invoice_no:
+            dup = con.execute("SELECT * FROM receipts WHERE user_id=? AND invoice_no=?", (session["user_id"], invoice_no)).fetchone()
+        if dup is None and store_code and purchase_date and total:
+            dup = con.execute("""SELECT * FROM receipts WHERE user_id=? AND store_code=? AND purchase_date=?
+                                 AND ABS(total-?)<0.005 AND item_count=?""",
+                              (session["user_id"], store_code, purchase_date, total, len(items))).fetchone()
+        if dup is not None:
+            # 把本次核对内容写回待确认文件，重新显示确认页让用户决定，库里不新增
+            data.update({"store_code": store_code, "purchase_date": purchase_date, "invoice_no": invoice_no,
+                         "subtotal": subtotal, "fees_total": fees_total, "tax": tax, "total": total, "items": items})
+            (PENDING / f"{rid}.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            con.close()
+            return render_template("receipt_confirm.html", d=data, rid=rid, dup=dict(dup))
+    receipt_id = insert_receipt(con, session["user_id"], store_code, purchase_date, subtotal, fees_total, tax, total,
+                                items, data.get("image_name", ""), "manual" if data.get("manual") else "receipt_scan", invoice_no)
+    con.commit(); con.close()
+    (PENDING / f"{rid}.json").unlink(missing_ok=True)
+    return redirect(url_for("receipt_done", receipt_id=receipt_id))
+
+def insert_receipt(con, user_id, store_code, purchase_date, subtotal, fees_total, tax, total, items, image_path, source, invoice_no=""):
+    """把一张已核对小票写入 receipts/receipt_items（门店代码同时登记 stores 并回填 store_id）。"""
+    store_id = None
+    if store_code:
+        con.execute("INSERT OR IGNORE INTO stores(store_code) VALUES(?)", (store_code,))
+        row = con.execute("SELECT id FROM stores WHERE store_code=?", (store_code,)).fetchone()
+        store_id = row["id"] if row else None
+    cur = con.execute("""INSERT INTO receipts(user_id,store_id,store_code,purchase_date,subtotal,fees_total,tax,total,item_count,invoice_no,image_path,source)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (user_id, store_id, store_code, purchase_date, subtotal, fees_total, tax, total, len(items), invoice_no or None, image_path, source))
     receipt_id = cur.lastrowid
     for it in items:
         con.execute("""INSERT INTO receipt_items(receipt_id,item_code,item_name,price,discount,enviro_fee,deposit,quantity,is_manual,line_order)
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (receipt_id, it["item_code"], it["item_name"], it["price"], it["discount"], it["enviro_fee"], it["deposit"], it["quantity"], it["is_manual"], it["line_order"]))
+    return receipt_id
+
+@app.route("/receipts/done/<int:receipt_id>")
+@login_required
+def receipt_done(receipt_id):
+    con = db()
+    r = con.execute("SELECT * FROM receipts WHERE id=? AND user_id=?", (receipt_id, session["user_id"])).fetchone()
+    con.close()
+    if r is None: abort(404)
+    return render_template("receipt_done.html", r=r)
+
+@app.route("/receipts/import-json", methods=["POST"])
+@login_required
+def receipt_import_json():
+    """导入手机版（Pages/IndexedDB）导出的已入库小票 JSON，写入正式库；重复的跳过并报数。"""
+    f = request.files.get("receipts_json")
+    if not f or not f.filename: flash("请先选择手机版导出的 JSON 文件。"); return redirect(url_for("receipts_new"))
+    try:
+        payload = json.loads(f.read().decode("utf-8-sig"))
+        records = payload.get("receipts", []) if isinstance(payload, dict) else payload
+        if not isinstance(records, list): raise ValueError("格式不对")
+    except Exception as e:
+        flash(f"导入失败，文件格式不对：{e}"); return redirect(url_for("receipts_new"))
+    con = db(); imported = 0; skipped = 0
+    for rec in records:
+        if not isinstance(rec, dict): skipped += 1; continue
+        items = []
+        for raw in rec.get("items", []):
+            ef = dp = 0.0
+            for fee in raw.get("attached_fees", []) or []:
+                nm = (fee.get("fee_name") or "").upper(); amt = fnum(fee.get("amount"))
+                if "ENVIRO" in nm: ef += amt
+                elif "DEP" in nm or "POSIT" in nm: dp += amt
+                else: ef += amt
+            items.append(dict(item_code=(raw.get("item_code") or "").strip(), item_name=(raw.get("item_name") or "").strip(),
+                              price=fnum(raw.get("price")), discount=fnum(raw.get("discount")), enviro_fee=round(ef, 2), deposit=round(dp, 2),
+                              quantity=int(fnum(raw.get("quantity"), 1)), is_manual=1 if raw.get("manual") else 0, line_order=len(items)))
+        # 未挂到商品的独立费用行计入费用合计（金额对得上优先；字段归属以商品上的费用为准）
+        fees_total = round(sum(it["enviro_fee"] + it["deposit"] for it in items) + sum(fnum(x.get("amount")) for x in (rec.get("fees") or [])), 2)
+        total = fnum(rec.get("total")) if rec.get("total") not in (None, "") else round(fnum(rec.get("subtotal")) + fees_total + fnum(rec.get("tax")), 2)
+        store_code = (rec.get("store_code") or "").strip(); purchase_date = norm_date(rec.get("purchase_date", "")); invoice_no = (rec.get("invoice_no") or "").strip()
+        dup = None
+        if invoice_no: dup = con.execute("SELECT 1 FROM receipts WHERE user_id=? AND invoice_no=?", (session["user_id"], invoice_no)).fetchone()
+        if dup is None and store_code and purchase_date and total:
+            dup = con.execute("SELECT 1 FROM receipts WHERE user_id=? AND store_code=? AND purchase_date=? AND ABS(total-?)<0.005 AND item_count=?",
+                              (session["user_id"], store_code, purchase_date, total, len(items))).fetchone()
+        if dup: skipped += 1; continue
+        if not items: skipped += 1; continue
+        insert_receipt(con, session["user_id"], store_code, purchase_date,
+                       fnum(rec.get("subtotal")) if rec.get("subtotal") not in (None, "") else round(sum(it["price"] + it["discount"] for it in items), 2),
+                       fees_total, fnum(rec.get("tax")), total, items, "", "phone_import", invoice_no)
+        imported += 1
     con.commit(); con.close()
-    (PENDING / f"{rid}.json").unlink(missing_ok=True)
-    flash(f"已入库 ✓ 共 {len(items)} 件，总计 ${total:.2f}")
+    flash(f"导入完成：新入 {imported} 张，跳过 {skipped} 张（重复或没有商品）。")
     return redirect(url_for("receipts_list"))
 
 @app.route("/receipts")

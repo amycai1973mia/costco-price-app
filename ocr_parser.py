@@ -171,7 +171,7 @@ def parse_receipt(lines):
     if auth_dates:
         purchase_date=max(auth_dates, key=auth_dates.get); date_conf=max(date_conf,0.8)
     # 总计/小计
-    total=None; total_conf=0.5; subtotal=None
+    total=None; total_conf=0.5; subtotal=None; tax=None
     for l in lines:
         t=l["text"]; up=t.upper()
         p=_price(t)
@@ -184,6 +184,8 @@ def parse_receipt(lines):
             total=p; total_conf=l["conf"]
         if "AMOUNT" in up and total is None:
             total=p; total_conf=l["conf"]
+        if re.search(r'\bTAX\b', up) and "TOTAL" not in up and lab.startswith("TAX"):
+            tax=p
     # 版式自纠: 底部 TOTAL NUMBER OF ... ITEMS= 件数 (OCR 可能漏首字母/认歪)
     expected_item_count=None
     for l in lines:
@@ -231,7 +233,15 @@ def parse_receipt(lines):
             pending=(pending[0], pending[1], pending[2], pending[3]+1)
             if pending[3]>2: pending=None
         if re.search(r'ENVIRO|EPOSIT|DEPOSIT', t.upper()):
-            pending=None; continue  # 费用行(无代码)已知不收录, 且其孤儿价不能串给下一商品
+            # 费用跟在所属商品（上一件）下面：同行有金额就挂到上一件的费用字段，不算商品件数
+            _fp=re.findall(r'-?\d{1,4}\.\d{2}', t)
+            if items and _fp:
+                try:
+                    _fv=float(_fp[-1])
+                    if 'ENVIRO' in t.upper(): items[-1]["enviro_fee"]=round(float(items[-1].get("enviro_fee") or 0)+_fv,2)
+                    else: items[-1]["deposit"]=round(float(items[-1].get("deposit") or 0)+_fv,2)
+                except ValueError: pass
+            pending=None; continue  # 费用行(无代码)不算商品, 且其孤儿价不能串给下一商品
         # --- 拆代码+名称 ---
         code=None; rest=None; qty=1; split_conf_cap=1.0; special=""
         m_doz=re.match(r'^(\d{3})([1-9])\s+([A-Za-z].*(?:DOZ|EGGS).+)$', t, re.I)
@@ -331,8 +341,9 @@ def parse_receipt(lines):
     product_count=sum(1 for it in items if not it.get("is_discount"))
     count_mismatch = expected_item_count is not None and product_count!=expected_item_count
     # 无价格的费用行 ENVIRO FEE / DEPOSIT 单独一行时，其价格常在同行已包含；此处不强行造
+    _fees_total=round(sum(float(it.get("enviro_fee") or 0)+float(it.get("deposit") or 0) for it in items),2)
     return {"store_code":store,"store_confidence":store_conf,"purchase_date":purchase_date,"date_confidence":date_conf if purchase_date else 0.3,
-            "total":total,"total_confidence":total_conf if total is not None else 0.3,"subtotal":subtotal,"items":items,"raw_lines":lines,"expected_item_count":expected_item_count,"product_count":product_count,"count_mismatch":count_mismatch}
+            "total":total,"total_confidence":total_conf if total is not None else 0.3,"subtotal":subtotal,"tax":tax,"fees_total":_fees_total,"items":items,"raw_lines":lines,"expected_item_count":expected_item_count,"product_count":product_count,"count_mismatch":count_mismatch}
 
 # --- 第二引擎 PaddleOCR (PP-OCRv5 mobile, 可选) 双保险 ---
 # 实测依据 (2026-10-17, 5张真票38件, 同预处理同解析): Paddle 数字 代码38/38 价格38/38,
